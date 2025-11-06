@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_tourai/settings_screen.dart';
 
 class SMSVerificationGeneralAccount extends StatefulWidget {
   const SMSVerificationGeneralAccount({super.key});
@@ -96,8 +97,10 @@ class _SMSVerificationGeneralAccountState extends State<SMSVerificationGeneralAc
             onSelected: (String value) {
               switch (value) {
                 case 'settings':
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Settings opened')),
+      // به جای SnackBar، به صفحه Settings برو
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => const SettingsScreen()),
                   );
                   break;
                 case 'help':
