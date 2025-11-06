@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_tourai/help_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -176,8 +177,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
               title: 'Help Center',
               trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: Color(0xFF617c89)),
               onTap: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Help center opened')),
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const HelpScreen()),
                 );
               },
             ),

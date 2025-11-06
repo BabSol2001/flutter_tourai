@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_tourai/help_screen.dart';
 import 'package:flutter_tourai/settings_screen.dart';
 
 class SMSVerificationGeneralAccount extends StatefulWidget {
@@ -104,8 +105,9 @@ class _SMSVerificationGeneralAccountState extends State<SMSVerificationGeneralAc
                   );
                   break;
                 case 'help':
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Help center')),
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => const HelpScreen()),
                   );
                   break;
               }
