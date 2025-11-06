@@ -85,6 +85,55 @@ class _SMSVerificationGeneralAccountState extends State<SMSVerificationGeneralAc
           style: TextStyle(color: Color(0xFF111618), fontWeight: FontWeight.bold),
         ),
         centerTitle: true,
+        // آیکون منو (سه خطی) اینجا درست قرار گرفته
+        actions: <Widget>[
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.menu, color: Color(0xFF111618)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            offset: const Offset(0, 56),
+            onSelected: (String value) {
+              switch (value) {
+                case 'settings':
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Settings opened')),
+                  );
+                  break;
+                case 'help':
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Help center')),
+                  );
+                  break;
+              }
+            },
+            itemBuilder: (BuildContext context) {
+              return [
+                const PopupMenuItem<String>(
+                  value: 'settings',
+                  child: Row(
+                    children: [
+                      Icon(Icons.settings, size: 20, color: Color(0xFF111618)),
+                      SizedBox(width: 12),
+                      Text('Settings'),
+                    ],
+                  ),
+                ),
+                const PopupMenuItem<String>(
+                  value: 'help',
+                  child: Row(
+                    children: [
+                      Icon(Icons.help, size: 20, color: Color(0xFF111618)),
+                      SizedBox(width: 12),
+                      Text('Help'),
+                    ],
+                  ),
+                ),
+                
+              ];
+            },
+          ),
+        ],
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
@@ -292,7 +341,7 @@ class _Indicator extends StatelessWidget {
       width: 48,
       height: 8,
       decoration: BoxDecoration(
-        color: active ? const Color(0xFF13a4ec) : const Color(0xFFDbe2e66),
+        color: active ? const Color(0xFF13a4ec) : const Color(0xFFDbe2e6),
         borderRadius: BorderRadius.circular(999),
       ),
     );
