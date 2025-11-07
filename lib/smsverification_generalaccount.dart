@@ -2,9 +2,17 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_tourai/help_screen.dart';
 import 'package:flutter_tourai/settings_screen.dart';
+import 'theme.dart';
 
 class SMSVerificationGeneralAccount extends StatefulWidget {
-  const SMSVerificationGeneralAccount({super.key});
+  final bool isDarkMode;
+  final Function(bool) onThemeChanged;
+
+  const SMSVerificationGeneralAccount({
+    super.key,
+    required this.isDarkMode,
+    required this.onThemeChanged,
+  });
 
   @override
   State<SMSVerificationGeneralAccount> createState() => _SMSVerificationGeneralAccountState();
@@ -45,9 +53,9 @@ class _SMSVerificationGeneralAccountState extends State<SMSVerificationGeneralAc
 
   void _sendCode() {
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Verification code sent!'),
-        backgroundColor: Color(0xFF13a4ec),
+      SnackBar(
+        content: const Text('Verification code sent!'),
+        backgroundColor: AppTheme.primary,
       ),
     );
   }
@@ -73,35 +81,45 @@ class _SMSVerificationGeneralAccountState extends State<SMSVerificationGeneralAc
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final textColor = theme.textTheme.bodyLarge?.color;
+    final hintColor = theme.hintColor;
+    final cardColor = theme.cardTheme.color;
+    final borderColor = theme.dividerColor;
+
     return Scaffold(
-      backgroundColor: const Color(0xFFF6F7F8),
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
-        backgroundColor: const Color(0xFFF6F7F8),
+        backgroundColor: theme.appBarTheme.backgroundColor,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Color(0xFF111618)),
+          icon: Icon(Icons.arrow_back, color: theme.appBarTheme.foregroundColor),
           onPressed: () => Navigator.pop(context),
         ),
-        title: const Text(
+        title: Text(
           'Create Your Account',
-          style: TextStyle(color: Color(0xFF111618), fontWeight: FontWeight.bold),
+          style: TextStyle(
+            color: theme.appBarTheme.foregroundColor,
+            fontWeight: FontWeight.bold,
+          ),
         ),
         centerTitle: true,
-        // آیکون منو (سه خطی) اینجا درست قرار گرفته
         actions: <Widget>[
           PopupMenuButton<String>(
-            icon: const Icon(Icons.menu, color: Color(0xFF111618)),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-            ),
+            icon: Icon(Icons.menu, color: theme.appBarTheme.foregroundColor),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
             offset: const Offset(0, 56),
             onSelected: (String value) {
               switch (value) {
                 case 'settings':
-      // به جای SnackBar، به صفحه Settings برو
                   Navigator.push(
                     context,
-                    MaterialPageRoute(builder: (context) => const SettingsScreen()),
+                    MaterialPageRoute(
+                      builder: (context) => SettingsScreen(
+                        isDarkMode: widget.isDarkMode,
+                        onThemeChanged: widget.onThemeChanged,
+                      ),
+                    ),
                   );
                   break;
                 case 'help':
@@ -114,27 +132,37 @@ class _SMSVerificationGeneralAccountState extends State<SMSVerificationGeneralAc
             },
             itemBuilder: (BuildContext context) {
               return [
-                const PopupMenuItem<String>(
+                PopupMenuItem<String>(
                   value: 'settings',
                   child: Row(
                     children: [
-                      Icon(Icons.settings, size: 20, color: Color(0xFF111618)),
-                      SizedBox(width: 12),
-                      Text('Settings'),
+                      Icon(Icons.settings, size: 20, color: theme.appBarTheme.foregroundColor),
+                      const SizedBox(width: 12),
+                      const Text('Settings'),
                     ],
                   ),
                 ),
-                const PopupMenuItem<String>(
+                PopupMenuItem<String>(
                   value: 'help',
                   child: Row(
                     children: [
-                      Icon(Icons.help, size: 20, color: Color(0xFF111618)),
-                      SizedBox(width: 12),
-                      Text('Help'),
+                      Icon(Icons.help, size: 20, color: theme.appBarTheme.foregroundColor),
+                      const SizedBox(width: 12),
+                      const Text('Help'),
                     ],
                   ),
                 ),
-                
+                const PopupMenuDivider(),
+                PopupMenuItem<String>(
+                  value: 'logout',
+                  child: Row(
+                    children: [
+                      const Icon(Icons.logout, size: 20, color: Colors.red),
+                      const SizedBox(width: 12),
+                      const Text('Logout', style: TextStyle(color: Colors.red)),
+                    ],
+                  ),
+                ),
               ];
             },
           ),
@@ -157,16 +185,16 @@ class _SMSVerificationGeneralAccountState extends State<SMSVerificationGeneralAc
             const SizedBox(height: 24),
 
             // Headline
-            const Text(
+            Text(
               "Let's get started",
-              style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: Color(0xFF111618)),
+              style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: textColor),
             ),
             const SizedBox(height: 12),
 
             // Body Text
-            const Text(
+            Text(
               "Please enter your mobile number to receive a verification code.",
-              style: TextStyle(fontSize: 16, color: Color(0xFF617c89)),
+              style: TextStyle(fontSize: 16, color: hintColor),
             ),
             const SizedBox(height: 32),
 
@@ -174,25 +202,25 @@ class _SMSVerificationGeneralAccountState extends State<SMSVerificationGeneralAc
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text("Phone Number", style: TextStyle(fontWeight: FontWeight.w500, color: Color(0xFF111618))),
+                Text("Phone Number", style: TextStyle(fontWeight: FontWeight.w500, color: textColor)),
                 const SizedBox(height: 8),
                 TextField(
                   controller: _phoneController,
                   keyboardType: TextInputType.phone,
                   decoration: InputDecoration(
                     prefixText: "+1 ",
-                    prefixStyle: const TextStyle(fontWeight: FontWeight.w500, color: Color(0xFF111618)),
-                    suffixIcon: const Icon(Icons.expand_more, color: Color(0xFF617c89)),
+                    prefixStyle: TextStyle(fontWeight: FontWeight.w500, color: textColor),
+                    suffixIcon: Icon(Icons.expand_more, color: hintColor),
                     hintText: "(555) 000-0000",
                     filled: true,
-                    fillColor: Colors.white,
+                    fillColor: cardColor,
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(16),
-                      borderSide: const BorderSide(color: Color(0xFFDbe2e6)),
+                      borderSide: BorderSide(color: borderColor),
                     ),
                     focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(16),
-                      borderSide: const BorderSide(color: Color(0xFF13a4ec), width: 2),
+                      borderSide: BorderSide(color: AppTheme.primary, width: 2),
                     ),
                     contentPadding: const EdgeInsets.symmetric(horizontal: 72, vertical: 18),
                   ),
@@ -208,7 +236,7 @@ class _SMSVerificationGeneralAccountState extends State<SMSVerificationGeneralAc
               child: ElevatedButton(
                 onPressed: _sendCode,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF13a4ec),
+                  backgroundColor: AppTheme.primary,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                 ),
                 child: const Text(
@@ -220,11 +248,11 @@ class _SMSVerificationGeneralAccountState extends State<SMSVerificationGeneralAc
             const SizedBox(height: 32),
 
             // Verification Code Section
-            const Text("Verification Code", style: TextStyle(fontWeight: FontWeight.w500, color: Color(0xFF111618))),
+            Text("Verification Code", style: TextStyle(fontWeight: FontWeight.w500, color: textColor)),
             const SizedBox(height: 8),
-            const Text(
+            Text(
               "We've sent a code to your number. Please enter it below.",
-              style: TextStyle(fontSize: 14, color: Color(0xFF617c89)),
+              style: TextStyle(fontSize: 14, color: hintColor),
             ),
             const SizedBox(height: 16),
 
@@ -241,18 +269,18 @@ class _SMSVerificationGeneralAccountState extends State<SMSVerificationGeneralAc
                     textAlign: TextAlign.center,
                     maxLength: 1,
                     inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                    style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFF101c22)),
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: textColor),
                     decoration: InputDecoration(
                       counterText: "",
                       filled: true,
-                      fillColor: Colors.white,
+                      fillColor: cardColor,
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(16),
-                        borderSide: const BorderSide(color: Color(0xFFDbe2e6)),
+                        borderSide: BorderSide(color: borderColor),
                       ),
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(16),
-                        borderSide: const BorderSide(color: Color(0xFF13a4ec), width: 2),
+                        borderSide: BorderSide(color: AppTheme.primary, width: 2),
                       ),
                       contentPadding: const EdgeInsets.symmetric(vertical: 16),
                     ),
@@ -274,14 +302,14 @@ class _SMSVerificationGeneralAccountState extends State<SMSVerificationGeneralAc
               child: _canResend
                   ? TextButton(
                       onPressed: _resendCode,
-                      child: const Text(
+                      child: Text(
                         "Didn't receive a code? Resend",
-                        style: TextStyle(color: Color(0xFF13a4ec), fontWeight: FontWeight.w500),
+                        style: TextStyle(color: AppTheme.primary, fontWeight: FontWeight.w500),
                       ),
                     )
                   : Text(
                       "Resend in ${_resendSeconds}s",
-                      style: const TextStyle(color: Color(0xFF617c89), fontSize: 14),
+                      style: TextStyle(color: hintColor, fontSize: 14),
                     ),
             ),
 
@@ -300,7 +328,7 @@ class _SMSVerificationGeneralAccountState extends State<SMSVerificationGeneralAc
                       }
                     : null,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: _isVerifyEnabled ? const Color(0xFF13a4ec) : const Color(0xFF13a4ec).withOpacity(0.3),
+                  backgroundColor: _isVerifyEnabled ? AppTheme.primary : AppTheme.primary.withOpacity(0.3),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                 ),
                 child: const Text(
@@ -312,12 +340,12 @@ class _SMSVerificationGeneralAccountState extends State<SMSVerificationGeneralAc
             const SizedBox(height: 16),
 
             // Disclaimer
-            const Center(
+            Center(
               child: Text.rich(
                 TextSpan(
                   text: "By continuing, you agree to our ",
-                  style: TextStyle(fontSize: 12, color: Color(0xFF617c89)),
-                  children: [
+                  style: TextStyle(fontSize: 12, color: hintColor),
+                  children: const [
                     TextSpan(text: "Terms of Service", style: TextStyle(decoration: TextDecoration.underline)),
                     TextSpan(text: " and "),
                     TextSpan(text: "Privacy Policy", style: TextStyle(decoration: TextDecoration.underline)),
@@ -342,11 +370,12 @@ class _Indicator extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Container(
       width: 48,
       height: 8,
       decoration: BoxDecoration(
-        color: active ? const Color(0xFF13a4ec) : const Color(0xFFDbe2e6),
+        color: active ? AppTheme.primary : theme.dividerColor,
         borderRadius: BorderRadius.circular(999),
       ),
     );

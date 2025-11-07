@@ -1,27 +1,50 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'smsverification_generalaccount.dart';
+import 'theme.dart';
 
-void main() {
-  runApp(const MyApp());
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  final prefs = await SharedPreferences.getInstance();
+  final isDarkMode = prefs.getBool('darkMode') ?? false;
+  runApp(MyApp(initialDarkMode: isDarkMode));
 }
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+class MyApp extends StatefulWidget {
+  final bool initialDarkMode;
+  const MyApp({super.key, required this.initialDarkMode});
+
+  @override
+  State<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> {
+  late bool _isDarkMode;
+
+  @override
+  void initState() {
+    super.initState();
+    _isDarkMode = widget.initialDarkMode;
+  }
+
+  void _toggleTheme(bool value) async {
+    setState(() => _isDarkMode = value);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('darkMode', value);
+  }
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'TourAI',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        fontFamily: 'Plus Jakarta Sans',
-        primaryColor: const Color(0xFF13a4ec),
-        scaffoldBackgroundColor: const Color(0xFFF6F7F8),
-        textTheme: const TextTheme(
-          bodyMedium: TextStyle(color: Color(0xFF111618)),
-        ),
+      theme: AppTheme.lightTheme,
+      darkTheme: AppTheme.darkTheme,
+      themeMode: _isDarkMode ? ThemeMode.dark : ThemeMode.light,
+      home: SMSVerificationGeneralAccount(
+        isDarkMode: _isDarkMode,
+        onThemeChanged: _toggleTheme,
       ),
-      home: const SMSVerificationGeneralAccount(),
     );
   }
 }

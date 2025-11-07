@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'theme.dart';
 
 class HelpScreen extends StatefulWidget {
   const HelpScreen({super.key});
@@ -19,23 +20,32 @@ class _HelpScreenState extends State<HelpScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final textColor = theme.textTheme.bodyLarge?.color;
+    final hintColor = theme.hintColor;
+    final cardColor = theme.cardTheme.color;
+    final borderColor = theme.dividerColor;
+
     return Scaffold(
-      backgroundColor: const Color(0xFFF6F7F8),
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
-        backgroundColor: const Color(0xFFF6F7F8),
+        backgroundColor: theme.appBarTheme.backgroundColor,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Color(0xFF111618)),
+          icon: Icon(Icons.arrow_back, color: theme.appBarTheme.foregroundColor),
           onPressed: () => Navigator.pop(context),
         ),
-        title: const Text(
+        title: Text(
           'Help Center',
-          style: TextStyle(color: Color(0xFF111618), fontWeight: FontWeight.bold),
+          style: TextStyle(
+            color: theme.appBarTheme.foregroundColor,
+            fontWeight: FontWeight.bold,
+          ),
         ),
         centerTitle: true,
         actions: <Widget>[
           IconButton(
-            icon: const Icon(Icons.menu, color: Color(0xFF111618)),
+            icon: Icon(Icons.menu, color: theme.appBarTheme.foregroundColor),
             onPressed: () {
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(content: Text('Menu opened')),
@@ -52,17 +62,18 @@ class _HelpScreenState extends State<HelpScreen> {
             // Search Bar
             Card(
               elevation: 0,
-              color: Colors.white,
+              color: cardColor,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
               child: TextField(
                 controller: _searchController,
                 onChanged: (value) => setState(() => _searchQuery = value),
                 decoration: InputDecoration(
                   hintText: 'Search for help...',
-                  prefixIcon: const Icon(Icons.search, color: Color(0xFF617c89)),
+                  hintStyle: TextStyle(color: hintColor),
+                  prefixIcon: Icon(Icons.search, color: hintColor),
                   suffixIcon: _searchQuery.isNotEmpty
                       ? IconButton(
-                          icon: const Icon(Icons.clear, color: Color(0xFF617c89)),
+                          icon: Icon(Icons.clear, color: hintColor),
                           onPressed: () {
                             _searchController.clear();
                             setState(() => _searchQuery = '');
@@ -77,9 +88,9 @@ class _HelpScreenState extends State<HelpScreen> {
             const SizedBox(height: 24),
 
             // Quick Actions
-            const Text(
+            Text(
               'Quick Actions',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF111618)),
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: textColor),
             ),
             const SizedBox(height: 16),
             GridView.count(
@@ -130,18 +141,18 @@ class _HelpScreenState extends State<HelpScreen> {
             const SizedBox(height: 24),
 
             // Popular Topics
-            const Text(
+            Text(
               'Popular Topics',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF111618)),
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: textColor),
             ),
             const SizedBox(height: 16),
-            ..._buildTopicTiles(),
+            ..._buildTopicTiles(context),
             const SizedBox(height: 24),
 
             // Contact Info
-            const Text(
+            Text(
               'Contact Information',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF111618)),
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: textColor),
             ),
             const SizedBox(height: 16),
             _buildContactTile(
@@ -176,9 +187,12 @@ class _HelpScreenState extends State<HelpScreen> {
     required String title,
     required VoidCallback onTap,
   }) {
+    final theme = Theme.of(context);
+    final cardColor = theme.cardTheme.color;
+
     return Card(
       elevation: 0,
-      color: Colors.white,
+      color: cardColor,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: InkWell(
         onTap: onTap,
@@ -191,10 +205,10 @@ class _HelpScreenState extends State<HelpScreen> {
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF13a4ec).withOpacity(0.1),
+                  color: AppTheme.primary.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: Icon(icon, color: const Color(0xFF13a4ec), size: 28),
+                child: Icon(icon, color: AppTheme.primary, size: 28),
               ),
               const SizedBox(height: 8),
               Text(
@@ -209,9 +223,10 @@ class _HelpScreenState extends State<HelpScreen> {
     );
   }
 
-  List<Widget> _buildTopicTiles() {
+  List<Widget> _buildTopicTiles(BuildContext context) {
     return [
       _buildTopicTile(
+        context: context,
         icon: Icons.account_circle,
         title: 'Account & Profile',
         subtitle: 'Manage your account settings',
@@ -222,6 +237,7 @@ class _HelpScreenState extends State<HelpScreen> {
         },
       ),
       _buildTopicTile(
+        context: context,
         icon: Icons.payment,
         title: 'Billing & Payments',
         subtitle: 'Payment methods and invoices',
@@ -232,6 +248,7 @@ class _HelpScreenState extends State<HelpScreen> {
         },
       ),
       _buildTopicTile(
+        context: context,
         icon: Icons.security,
         title: 'Privacy & Security',
         subtitle: 'Protect your data',
@@ -242,6 +259,7 @@ class _HelpScreenState extends State<HelpScreen> {
         },
       ),
       _buildTopicTile(
+        context: context,
         icon: Icons.contact_support,
         title: 'Technical Support',
         subtitle: 'App issues and bugs',
@@ -255,14 +273,19 @@ class _HelpScreenState extends State<HelpScreen> {
   }
 
   Widget _buildTopicTile({
+    required BuildContext context,
     required IconData icon,
     required String title,
     required String subtitle,
     required VoidCallback onTap,
   }) {
+    final theme = Theme.of(context);
+    final cardColor = theme.cardTheme.color;
+    final hintColor = theme.hintColor;
+
     return Card(
       elevation: 0,
-      color: Colors.white,
+      color: cardColor,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       margin: const EdgeInsets.only(bottom: 12),
       child: InkWell(
@@ -275,10 +298,10 @@ class _HelpScreenState extends State<HelpScreen> {
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF13a4ec).withOpacity(0.1),
+                  color: AppTheme.primary.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: Icon(icon, color: const Color(0xFF13a4ec), size: 24),
+                child: Icon(icon, color: AppTheme.primary, size: 24),
               ),
               const SizedBox(width: 16),
               Expanded(
@@ -292,12 +315,12 @@ class _HelpScreenState extends State<HelpScreen> {
                     const SizedBox(height: 4),
                     Text(
                       subtitle,
-                      style: TextStyle(fontSize: 14, color: Color(0xFF617c89)),
+                      style: TextStyle(fontSize: 14, color: hintColor),
                     ),
                   ],
                 ),
               ),
-              const Icon(Icons.arrow_forward_ios, size: 16, color: Color(0xFF617c89)),
+              Icon(Icons.arrow_forward_ios, size: 16, color: hintColor),
             ],
           ),
         ),
@@ -311,9 +334,13 @@ class _HelpScreenState extends State<HelpScreen> {
     required String subtitle,
     required VoidCallback onTap,
   }) {
+    final theme = Theme.of(context);
+    final cardColor = theme.cardTheme.color;
+    final hintColor = theme.hintColor;
+
     return Card(
       elevation: 0,
-      color: Colors.white,
+      color: cardColor,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       margin: const EdgeInsets.only(bottom: 12),
       child: InkWell(
@@ -323,7 +350,7 @@ class _HelpScreenState extends State<HelpScreen> {
           padding: const EdgeInsets.all(16),
           child: Row(
             children: [
-              Icon(icon, color: const Color(0xFF13a4ec), size: 24),
+              Icon(icon, color: AppTheme.primary, size: 24),
               const SizedBox(width: 16),
               Expanded(
                 child: Column(
@@ -335,12 +362,12 @@ class _HelpScreenState extends State<HelpScreen> {
                     ),
                     Text(
                       subtitle,
-                      style: TextStyle(fontSize: 14, color: Color(0xFF617c89)),
+                      style: TextStyle(fontSize: 14, color: hintColor),
                     ),
                   ],
                 ),
               ),
-              const Icon(Icons.arrow_forward_ios, size: 16, color: Color(0xFF617c89)),
+              Icon(Icons.arrow_forward_ios, size: 16, color: hintColor),
             ],
           ),
         ),

@@ -25,10 +25,11 @@ class AppTheme {
       iconTheme: IconThemeData(color: textDark),
       titleTextStyle: TextStyle(color: textDark, fontWeight: FontWeight.bold, fontSize: 18),
     ),
-    cardTheme: CardTheme(
+    cardTheme: CardThemeData(
       color: cardLight,
       elevation: 0,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      clipBehavior: Clip.antiAlias,
     ),
     textTheme: const TextTheme(
       bodyLarge: TextStyle(color: textDark),
@@ -81,10 +82,11 @@ class AppTheme {
       iconTheme: IconThemeData(color: textLight),
       titleTextStyle: TextStyle(color: textLight, fontWeight: FontWeight.bold, fontSize: 18),
     ),
-    cardTheme: CardTheme(
+    cardTheme: CardThemeData(
       color: cardDark,
       elevation: 0,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      clipBehavior: Clip.antiAlias,
     ),
     textTheme: const TextTheme(
       bodyLarge: TextStyle(color: textLight),
