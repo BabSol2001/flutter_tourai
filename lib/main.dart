@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_tourai/navigation_map_screen.dart';
 import 'package:flutter_tourai/travel_agency_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'smsverification_generalaccount.dart';
@@ -43,20 +44,10 @@ class _MyAppState extends State<MyApp> {
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
       themeMode: _isDarkMode ? ThemeMode.dark : ThemeMode.light,
-      home: TravelRecommendationsScreen(
-        isDarkMode: false,
-        onThemeChanged: (bool value) {
-          // اینجا تم رو تغییر بده (مثل main.dart اصلی)
-          // فعلاً فقط پیام نشون بده
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Theme changed to ${value ? "Dark" : "Light"}')),
-          );
-        },
-      ),
-      // home: SMSVerificationGeneralAccount(
-      //   isDarkMode: _isDarkMode,
-      //   onThemeChanged: _toggleTheme,
-      // ),
+        home: NavigationMapScreen(
+        isDarkMode: _isDarkMode,
+        onThemeChanged: _toggleTheme,
+        ),
     );
   }
 }
