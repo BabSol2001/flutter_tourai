@@ -1,17 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
 import 'theme.dart';
+import 'settings_screen.dart';
 
 class TravelPlanScreen extends StatefulWidget {
+  final Function(bool)? onThemeChanged;
+
+  const TravelPlanScreen({super.key, this.onThemeChanged});
+
   @override
   _TravelPlanScreenState createState() => _TravelPlanScreenState();
 }
 
 class _TravelPlanScreenState extends State<TravelPlanScreen> {
+  final dio = Dio(BaseOptions(baseUrl: 'http://10.0.2.2:8000/api/travel/'));
   final _formKey = GlobalKey<FormState>();
-  final dio = Dio(BaseOptions(baseUrl: 'http://10.0.2.2:8000/api/travel/')); // برای اندروید امولاتور
 
-  // فرم فیلدها
   String cities = '';
   String attractionType = 'historical';
   String duration = 'one_day';
@@ -50,8 +54,7 @@ class _TravelPlanScreenState extends State<TravelPlanScreen> {
     setState(() => isLoading = true);
 
     try {
-      // 1. ذخیره برنامه
-      final saveResponse = await dio.post('travelplans/', data: {
+      await dio.post('travelplans/', data: {
         'cities': cities,
         'attraction_type': attractionType,
         'duration': duration,
@@ -61,7 +64,6 @@ class _TravelPlanScreenState extends State<TravelPlanScreen> {
         'additional_notes': additionalNotes,
       });
 
-      // 2. ساخت پرامپت
       final promptResponse = await dio.post('generate-prompt/', data: {
         'cities': cities,
         'attraction_type': attractionType,
@@ -73,10 +75,7 @@ class _TravelPlanScreenState extends State<TravelPlanScreen> {
 
       setState(() => prompt = promptResponse.data['prompt']);
 
-      // 3. گرفتن جواب AI
-      final aiResponse = await dio.post('ai-travelplan/', data: {
-        'prompt': prompt,
-      });
+      final aiResponse = await dio.post('ai-travelplan/', data: {'prompt': prompt});
 
       setState(() {
         chatGptResponse = aiResponse.data['chatgpt_response'];
@@ -96,17 +95,60 @@ class _TravelPlanScreenState extends State<TravelPlanScreen> {
     final theme = Theme.of(context);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('برنامه‌ریزی سفر با AI')),
-      body: Padding(
+      appBar: AppBar(
+        backgroundColor: theme.appBarTheme.backgroundColor,
+        elevation: 0,
+        title: Text(
+          'برنامه‌ریزی سفر با AI',
+          style: TextStyle(fontWeight: FontWeight.bold, color: theme.appBarTheme.foregroundColor),
+        ),
+        centerTitle: true,
+        actions: [
+          PopupMenuButton<String>(
+            icon: Icon(Icons.more_vert, color: theme.appBarTheme.foregroundColor),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            onSelected: (value) {
+              if (value == 'settings') {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => SettingsScreen(
+                      isDarkMode: Theme.of(context).brightness == Brightness.dark,
+                      onThemeChanged: widget.onThemeChanged ?? (v) {},
+                    ),
+                  ),
+                );
+              }
+            },
+            itemBuilder: (context) => [
+              const PopupMenuItem(
+                value: 'settings',
+                child: Row(children: [Icon(Icons.settings), SizedBox(width: 12), Text('تنظیمات')]),
+              ),
+            ],
+          ),
+        ],
+      ),
+      body: Container(
         padding: const EdgeInsets.all(16),
         child: Form(
           key: _formKey,
-          child: ListView(
+          child: ListView( // خطا رفع شد
             children: [
               // شهرها
               TextFormField(
-                decoration: const InputDecoration(labelText: 'شهر مقصد', hintText: 'مثلاً: شیراز، اصفهان'),
-                validator: (v) => v!.isEmpty ? 'لطفاً شهر را وارد کنید' : null,
+                decoration: InputDecoration(
+                  labelText: 'شهر مقصد',
+                  hintText: 'مثلاً: شیراز، اصفهان',
+                  filled: true,
+                  fillColor: theme.inputDecorationTheme.fillColor,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
+                  prefixIcon: const Icon(Icons.location_city, size: 20),
+                ),
+                validator: (v) => v!.isEmpty ? 'شهر را وارد کنید' : null,
                 onChanged: (v) => cities = v,
               ),
               const SizedBox(height: 16),
@@ -114,7 +156,16 @@ class _TravelPlanScreenState extends State<TravelPlanScreen> {
               // نوع جاذبه
               DropdownButtonFormField<String>(
                 value: attractionType,
-                decoration: const InputDecoration(labelText: 'نوع جاذبه مورد علاقه'),
+                decoration: InputDecoration(
+                  labelText: 'نوع جاذبه',
+                  filled: true,
+                  fillColor: theme.inputDecorationTheme.fillColor,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
+                  prefixIcon: const Icon(Icons.category, size: 20),
+                ),
                 items: attractionChoices.entries
                     .map((e) => DropdownMenuItem(value: e.key, child: Text(e.value)))
                     .toList(),
@@ -125,7 +176,16 @@ class _TravelPlanScreenState extends State<TravelPlanScreen> {
               // مدت زمان
               DropdownButtonFormField<String>(
                 value: duration,
-                decoration: const InputDecoration(labelText: 'مدت سفر'),
+                decoration: InputDecoration(
+                  labelText: 'مدت سفر',
+                  filled: true,
+                  fillColor: theme.inputDecorationTheme.fillColor,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
+                  prefixIcon: const Icon(Icons.access_time, size: 20),
+                ),
                 items: durationChoices.entries
                     .map((e) => DropdownMenuItem(value: e.key, child: Text(e.value)))
                     .toList(),
@@ -135,22 +195,45 @@ class _TravelPlanScreenState extends State<TravelPlanScreen> {
 
               // وسیله نقلیه
               SwitchListTile(
-                title: const Text('وسیله نقلیه دارم'),
+                title: Row(
+                  children: [
+                    Icon(Icons.directions_car, size: 20, color: AppTheme.primary),
+                    const SizedBox(width: 8),
+                    const Text('وسیله نقلیه دارم'),
+                  ],
+                ),
                 value: hasVehicle,
                 onChanged: (v) => setState(() => hasVehicle = v),
+                activeColor: AppTheme.primary,
               ),
 
               // معلول همراه
               SwitchListTile(
-                title: const Text('مسافر معلول همراه است'),
+                title: Row(
+                  children: [
+                    Icon(Icons.accessible, size: 20, color: AppTheme.primary),
+                    const SizedBox(width: 8),
+                    const Text('مسافر معلول همراه است'),
+                  ],
+                ),
                 value: hasDisabled,
                 onChanged: (v) => setState(() => hasDisabled = v),
+                activeColor: AppTheme.primary,
               ),
 
               if (hasDisabled) ...[
                 const SizedBox(height: 8),
                 TextFormField(
-                  decoration: const InputDecoration(labelText: 'جزئیات معلولیت'),
+                  decoration: InputDecoration(
+                    labelText: 'جزئیات معلولیت',
+                    filled: true,
+                    fillColor: theme.inputDecorationTheme.fillColor,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
+                    prefixIcon: const Icon(Icons.info, size: 20),
+                  ),
                   maxLines: 3,
                   onChanged: (v) => disabledDetails = v,
                 ),
@@ -158,32 +241,45 @@ class _TravelPlanScreenState extends State<TravelPlanScreen> {
 
               const SizedBox(height: 16),
               TextFormField(
-                decoration: const InputDecoration(labelText: 'یادداشت اضافی'),
+                decoration: InputDecoration(
+                  labelText: 'یادداشت اضافی',
+                  filled: true,
+                  fillColor: theme.inputDecorationTheme.fillColor,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
+                  prefixIcon: const Icon(Icons.note, size: 20),
+                ),
                 maxLines: 3,
                 onChanged: (v) => additionalNotes = v,
               ),
 
               const SizedBox(height: 24),
-              ElevatedButton(
+              ElevatedButton.icon(
                 onPressed: isLoading ? null : _submitForm,
-                child: isLoading
-                    ? const CircularProgressIndicator(color: Colors.white)
-                    : const Text('بساز برنامه سفر!'),
+                icon: isLoading
+                    ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                    : const Icon(Icons.smart_toy, size: 20),
+                label: const Text('بساز برنامه سفر!', style: TextStyle(fontWeight: FontWeight.bold)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppTheme.primary,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  elevation: 2,
+                ),
               ),
 
-              if (prompt != null) ...[
-                const Divider(height: 32),
-                Text('پرامپت:', style: theme.textTheme.titleMedium),
-                SelectableText(prompt!, style: const TextStyle(fontSize: 12)),
-              ],
-
+              // نتیجه AI
               if (chatGptResponse != null) ...[
-                const Divider(height: 32),
+                const SizedBox(height: 32),
+                Text(
+                  'نتیجه هوش مصنوعی',
+                  style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 16),
                 _buildAIResponse('ChatGPT', chatGptResponse!, Colors.blue),
-              ],
-
-              if (deepSeekResponse != null) ...[
-                const Divider(height: 32),
+                const SizedBox(height: 16),
                 _buildAIResponse('DeepSeek', deepSeekResponse!, Colors.green),
               ],
             ],
@@ -194,18 +290,26 @@ class _TravelPlanScreenState extends State<TravelPlanScreen> {
   }
 
   Widget _buildAIResponse(String title, String response, Color color) {
-    return Card(
-      color: color.withOpacity(0.1),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(title, style: TextStyle(fontWeight: FontWeight.bold, color: color)),
-            const SizedBox(height: 8),
-            SelectableText(response),
-          ],
-        ),
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withOpacity(0.3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.smart_toy, color: color),
+              const SizedBox(width: 8),
+              Text(title, style: TextStyle(fontWeight: FontWeight.bold, color: color, fontSize: 16)),
+            ],
+          ),
+          const SizedBox(height: 12),
+          SelectableText(response, style: const TextStyle(fontSize: 14)),
+        ],
       ),
     );
   }

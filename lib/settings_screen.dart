@@ -45,7 +45,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(
-          'Settings',
+          'تنظیمات',
           style: TextStyle(
             color: theme.appBarTheme.foregroundColor,
             fontWeight: FontWeight.bold,
@@ -57,7 +57,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             icon: Icon(Icons.search, color: theme.appBarTheme.foregroundColor),
             onPressed: () {
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Search settings...')),
+                const SnackBar(content: Text('جستجو در تنظیمات...')),
               );
             },
           ),
@@ -88,11 +88,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'John Doe',
+                            'بابک عسل',
                             style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: textColor),
                           ),
                           Text(
-                            'johndoe@example.com',
+                            'babak@example.com',
                             style: TextStyle(fontSize: 14, color: textColor?.withOpacity(0.7)),
                           ),
                         ],
@@ -102,7 +102,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       icon: Icon(Icons.edit, color: AppTheme.primary),
                       onPressed: () {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Edit profile')),
+                          const SnackBar(content: Text('ویرایش پروفایل')),
                         );
                       },
                     ),
@@ -114,7 +114,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
             // Appearance Section
             Text(
-              'Appearance',
+              'ظاهر',
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: textColor),
             ),
             const SizedBox(height: 16),
@@ -125,17 +125,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
               child: Column(
                 children: [
                   _buildThemeOption(
-                    title: 'Light Mode',
+                    title: 'حالت روشن',
                     icon: Icons.light_mode,
                     isSelected: !_darkMode,
-                    onTap: () => widget.onThemeChanged(false),
+                    onTap: () {
+                      setState(() => _darkMode = false);
+                      widget.onThemeChanged(false);
+                    },
                   ),
                   const Divider(height: 1),
                   _buildThemeOption(
-                    title: 'Dark Mode',
+                    title: 'حالت تاریک',
                     icon: Icons.dark_mode,
                     isSelected: _darkMode,
-                    onTap: () => widget.onThemeChanged(true),
+                    onTap: () {
+                      setState(() => _darkMode = true);
+                      widget.onThemeChanged(true);
+                    },
                   ),
                 ],
               ),
@@ -144,13 +150,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
             // Notifications Section
             Text(
-              'Notifications',
+              'اعلان‌ها',
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: textColor),
             ),
             const SizedBox(height: 16),
             _buildSettingTile(
               icon: Icons.notifications,
-              title: 'Push Notifications',
+              title: 'اعلان‌های پوش',
               trailing: Switch(
                 value: _pushNotifications,
                 onChanged: (value) => setState(() => _pushNotifications = value),
@@ -159,7 +165,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
             _buildSettingTile(
               icon: Icons.email,
-              title: 'Email Notifications',
+              title: 'اعلان‌های ایمیل',
               trailing: Switch(
                 value: _emailNotifications,
                 onChanged: (value) => setState(() => _emailNotifications = value),
@@ -170,27 +176,27 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
             // Privacy & Security
             Text(
-              'Privacy & Security',
+              'حریم خصوصی و امنیت',
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: textColor),
             ),
             const SizedBox(height: 16),
             _buildSettingTile(
               icon: Icons.privacy_tip,
-              title: 'Privacy Settings',
+              title: 'تنظیمات حریم خصوصی',
               trailing: const Icon(Icons.arrow_forward_ios, size: 16),
               onTap: () {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Privacy settings')),
+                  const SnackBar(content: Text('تنظیمات حریم خصوصی')),
                 );
               },
             ),
             _buildSettingTile(
               icon: Icons.security,
-              title: 'Account Security',
-              trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+              title: 'امنیت حساب',
+              trailing: const Icon(Icons.arrow_forward_ios, size: 16), // خطا رفع شد
               onTap: () {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Security settings')),
+                  const SnackBar(content: Text('تنظیمات امنیت')),
                 );
               },
             ),
@@ -198,13 +204,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
             // Help
             Text(
-              'Help',
+              'کمک',
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: textColor),
             ),
             const SizedBox(height: 16),
             _buildSettingTile(
               icon: Icons.help_outline,
-              title: 'Help Center',
+              title: 'مرکز کمک',
               trailing: const Icon(Icons.arrow_forward_ios, size: 16),
               onTap: () {
                 Navigator.push(
@@ -215,11 +221,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
             _buildSettingTile(
               icon: Icons.feedback,
-              title: 'Send Feedback',
+              title: 'ارسال بازخورد',
               trailing: const Icon(Icons.arrow_forward_ios, size: 16),
               onTap: () {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Feedback sent')),
+                  const SnackBar(content: Text('بازخورد ارسال شد')),
                 );
               },
             ),
@@ -235,21 +241,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     context: context,
                     builder: (context) => AlertDialog(
                       backgroundColor: cardColor,
-                      title: Text('Logout', style: TextStyle(color: textColor)),
-                      content: Text('Are you sure you want to logout?', style: TextStyle(color: textColor)),
+                      title: Text('خروج', style: TextStyle(color: textColor)),
+                      content: Text('آیا مطمئن هستید که می‌خواهید خارج شوید؟', style: TextStyle(color: textColor)),
                       actions: [
                         TextButton(
                           onPressed: () => Navigator.pop(context),
-                          child: const Text('Cancel'),
+                          child: const Text('لغو'),
                         ),
                         TextButton(
                           onPressed: () {
                             Navigator.pop(context);
                             ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('Logged out successfully!'), backgroundColor: Colors.red),
+                              const SnackBar(content: Text('با موفقیت خارج شدید!'), backgroundColor: Colors.red),
                             );
                           },
-                          child: const Text('Logout', style: TextStyle(color: Colors.red)),
+                          child: const Text('خروج', style: TextStyle(color: Colors.red)),
                         ),
                       ],
                     ),
@@ -260,7 +266,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                 ),
                 child: const Text(
-                  'Logout',
+                  'خروج از حساب',
                   style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.red),
                 ),
               ),

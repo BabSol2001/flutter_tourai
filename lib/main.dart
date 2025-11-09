@@ -38,7 +38,6 @@ class _TourAIAppState extends State<TourAIApp> {
   }
 }
 
-// صفحه اصلی با نویگیشن
 class MainScreen extends StatefulWidget {
   final bool isDarkMode;
   final Function(bool) onThemeChanged;
@@ -62,7 +61,7 @@ class _MainScreenState extends State<MainScreen> {
   void initState() {
     super.initState();
     _screens = [
-      TravelPlanScreen(),
+      TravelPlanScreen(onThemeChanged: widget.onThemeChanged),
       NavigationMapScreen(
         isDarkMode: widget.isDarkMode,
         onThemeChanged: widget.onThemeChanged,
