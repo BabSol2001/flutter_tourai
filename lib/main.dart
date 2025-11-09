@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_tourai/travel_agency_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'smsverification_generalaccount.dart';
 import 'theme.dart';
@@ -41,10 +42,11 @@ class _MyAppState extends State<MyApp> {
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
       themeMode: _isDarkMode ? ThemeMode.dark : ThemeMode.light,
-      home: SMSVerificationGeneralAccount(
-        isDarkMode: _isDarkMode,
-        onThemeChanged: _toggleTheme,
-      ),
+      home: const TravelAgencyScreen(),
+      // home: SMSVerificationGeneralAccount(
+      //   isDarkMode: _isDarkMode,
+      //   onThemeChanged: _toggleTheme,
+      // ),
     );
   }
 }
