@@ -21,9 +21,22 @@ class NavigationMapScreen extends StatefulWidget {
 
 class _NavigationMapScreenState extends State<NavigationMapScreen> with TickerProviderStateMixin {
   final MapController _mapController = MapController();
+
+  // Search Animation
   late AnimationController _searchController;
   late Animation<double> _searchAnimation;
   bool _isSearchExpanded = false;
+
+  // Explore Animation
+  late AnimationController _exploreController;
+  late Animation<double> _exploreHeight;
+  bool _isExploreExpanded = false;
+
+  // AI Animation
+  late AnimationController _aiController;
+  late Animation<double> _aiHeight;
+  bool _isAIExpanded = false;
+
   int _selectedIndex = 1;
 
   final List<Marker> _markers = [
@@ -50,13 +63,18 @@ class _NavigationMapScreenState extends State<NavigationMapScreen> with TickerPr
   @override
   void initState() {
     super.initState();
-    _searchController = AnimationController(
-      duration: const Duration(milliseconds: 300),
-      vsync: this,
-    );
-    _searchAnimation = Tween<double>(begin: 56, end: 0).animate(
-      CurvedAnimation(parent: _searchController, curve: Curves.easeInOut),
-    );
+
+    // Search
+    _searchController = AnimationController(duration: const Duration(milliseconds: 300), vsync: this);
+    _searchAnimation = Tween<double>(begin: 56, end: 0).animate(CurvedAnimation(parent: _searchController, curve: Curves.easeInOut));
+
+    // Explore
+    _exploreController = AnimationController(duration: const Duration(milliseconds: 300), vsync: this);
+    _exploreHeight = Tween<double>(begin: 60, end: 280).animate(CurvedAnimation(parent: _exploreController, curve: Curves.easeInOut));
+
+    // AI
+    _aiController = AnimationController(duration: const Duration(milliseconds: 300), vsync: this);
+    _aiHeight = Tween<double>(begin: 60, end: 280).animate(CurvedAnimation(parent: _aiController, curve: Curves.easeInOut));
   }
 
   @override
@@ -71,14 +89,14 @@ class _NavigationMapScreenState extends State<NavigationMapScreen> with TickerPr
   @override
   void dispose() {
     _searchController.dispose();
+    _exploreController.dispose();
+    _aiController.dispose();
     super.dispose();
   }
 
   void _onItemTapped(int index) {
     setState(() => _selectedIndex = index);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Navigate to screen $index')),
-    );
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Navigate to screen $index')));
   }
 
   @override
@@ -113,10 +131,7 @@ class _NavigationMapScreenState extends State<NavigationMapScreen> with TickerPr
                   );
                   break;
                 case 'help':
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (context) => const HelpScreen()),
-                  );
+                  Navigator.push(context, MaterialPageRoute(builder: (context) => const HelpScreen()));
                   break;
                 case 'logout':
                   showDialog(
@@ -170,20 +185,87 @@ class _NavigationMapScreenState extends State<NavigationMapScreen> with TickerPr
             ],
           ),
 
-          // Explore Nearby + AI Suggested
+          // Explore + AI Cards (Minimized / Expanded)
           Positioned(
             bottom: 100,
             left: 0,
             right: 0,
-            child: SizedBox(
-              height: 320,
-              child: PageView(
-                controller: PageController(viewportFraction: 0.85),
-                children: [
-                  _buildExploreSection(theme),
-                  _buildAISuggestedSection(theme),
-                ],
-              ),
+            child: Column(
+              children: [
+                // Explore Card
+                AnimatedBuilder(
+                  animation: _exploreHeight,
+                  builder: (context, child) {
+                    return GestureDetector(
+                      onTap: () {
+                        setState(() {
+                          _isExploreExpanded = !_isExploreExpanded;
+                          if (_isExploreExpanded) {
+                            _exploreController.forward();
+                            if (_isAIExpanded) {
+                              _isAIExpanded = false;
+                              _aiController.reverse();
+                            }
+                          } else {
+                            _exploreController.reverse();
+                          }
+                        });
+                      },
+                      child: Container(
+                        height: _exploreHeight.value,
+                        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: theme.cardColor.withOpacity(0.5),
+                          borderRadius: BorderRadius.circular(20),
+                          boxShadow: [
+                            BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 8, offset: const Offset(0, 2)),
+                          ],
+                        ),
+                        child: _isExploreExpanded
+                            ? _buildExploreExpanded(theme)
+                            : _buildTabHeader(Icons.explore, 'Explore Nearby', AppTheme.primary),
+                      ),
+                    );
+                  },
+                ),
+
+                // AI Card
+                AnimatedBuilder(
+                  animation: _aiHeight,
+                  builder: (context, child) {
+                    return GestureDetector(
+                      onTap: () {
+                        setState(() {
+                          _isAIExpanded = !_isAIExpanded;
+                          if (_isAIExpanded) {
+                            _aiController.forward();
+                            if (_isExploreExpanded) {
+                              _isExploreExpanded = false;
+                              _exploreController.reverse();
+                            }
+                          } else {
+                            _aiController.reverse();
+                          }
+                        });
+                      },
+                      child: Container(
+                        height: _aiHeight.value,
+                        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: theme.cardColor.withOpacity(0.5),
+                          borderRadius: BorderRadius.circular(20),
+                          boxShadow: [
+                            BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 8, offset: const Offset(0, 2)),
+                          ],
+                        ),
+                        child: _isAIExpanded
+                            ? _buildAIExpanded(theme)
+                            : _buildTabHeader(Icons.auto_awesome, 'AI Suggested', Colors.purple),
+                      ),
+                    );
+                  },
+                ),
+              ],
             ),
           ),
 
@@ -215,11 +297,7 @@ class _NavigationMapScreenState extends State<NavigationMapScreen> with TickerPr
                         color: theme.cardColor.withOpacity(0.5),
                         borderRadius: BorderRadius.circular(28),
                         boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.1),
-                            blurRadius: 8,
-                            offset: const Offset(0, 2),
-                          ),
+                          BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 8, offset: const Offset(0, 2)),
                         ],
                       ),
                       child: _isSearchExpanded
@@ -242,9 +320,7 @@ class _NavigationMapScreenState extends State<NavigationMapScreen> with TickerPr
                                 IconButton(
                                   icon: const Icon(Icons.tune, size: 20),
                                   onPressed: () {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(content: Text('Filters opened')),
-                                    );
+                                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Filters opened')));
                                   },
                                 ),
                                 IconButton(
@@ -258,9 +334,7 @@ class _NavigationMapScreenState extends State<NavigationMapScreen> with TickerPr
                                 ),
                               ],
                             )
-                          : const Center(
-                              child: Icon(Icons.search, size: 24),
-                            ),
+                          : const Center(child: Icon(Icons.search, size: 24)),
                     ),
                   );
                 },
@@ -285,95 +359,62 @@ class _NavigationMapScreenState extends State<NavigationMapScreen> with TickerPr
       ),
       floatingActionButton: FloatingActionButton(
         backgroundColor: AppTheme.primary,
-        onPressed: () {
-          _mapController.move(LatLng(35.6892, 51.3890), 15);
-        },
+        onPressed: () => _mapController.move(LatLng(35.6892, 51.3890), 15),
         child: const Icon(Icons.my_location, color: Colors.white),
       ),
     );
   }
 
-  // Explore Nearby
-  Widget _buildExploreSection(ThemeData theme) {
-    return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      color: theme.cardColor.withOpacity(0.5),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+  // Header تب
+  Widget _buildTabHeader(IconData icon, String title, Color color) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: Row(
         children: [
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              children: [
-                Icon(Icons.explore, color: AppTheme.primary),
-                const SizedBox(width: 8),
-                Text('Explore Nearby', style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
-              ],
-            ),
-          ),
-          SizedBox(
-            height: 160,
-            child: ListView(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-              children: [
-                _buildNearbyCard(
-                  'Milad Tower',
-                  '2.1 km',
-                  'https://images.unsplash.com/photo-1578662996442-48f60103fc96?auto=format&fit=crop&w=800',
-                  theme,
-                ),
-                _buildNearbyCard(
-                  'Azadi Tower',
-                  '5.3 km',
-                  'https://images.unsplash.com/photo-1581093450021-4a7360e9a6b5?auto=format&fit=crop&w=800',
-                  theme,
-                ),
-                _buildNearbyCard(
-                  'Golestan Palace',
-                  '8.7 km',
-                  'https://images.unsplash.com/photo-1585208798174-6cedd78e0198?auto=format&fit=crop&w=800',
-                  theme,
-                ),
-              ],
-            ),
-          ),
+          Icon(icon, color: color, size: 20),
+          const SizedBox(width: 8),
+          Text(title, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+          const Spacer(),
+          Icon(Icons.keyboard_arrow_up, size: 20, color: color.withOpacity(0.7)),
         ],
       ),
     );
   }
 
-  // AI Suggested
-  Widget _buildAISuggestedSection(ThemeData theme) {
-    return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      color: theme.cardColor.withOpacity(0.5),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              children: [
-                Icon(Icons.auto_awesome, color: Colors.purple),
-                const SizedBox(width: 8),
-                Text('AI Suggested Spot', style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
-              ],
-            ),
+  // Explore Expanded
+  Widget _buildExploreExpanded(ThemeData theme) {
+    return Column(
+      children: [
+        _buildTabHeader(Icons.explore, 'Explore Nearby', AppTheme.primary),
+        Expanded(
+          child: ListView(
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            children: [
+              _buildNearbyCard('Milad Tower', '2.1 km', 'https://images.unsplash.com/photo-1578662996442-48f60103fc96?auto=format&fit=crop&w=800', theme),
+              _buildNearbyCard('Azadi Tower', '5.3 km', 'https://images.unsplash.com/photo-1581093450021-4a7360e9a6b5?auto=format&fit=crop&w=800', theme),
+              _buildNearbyCard('Golestan Palace', '8.7 km', 'https://images.unsplash.com/photo-1585208798174-6cedd78e0198?auto=format&fit=crop&w=800', theme),
+            ],
           ),
-          Expanded(
-            child: ListView(
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-              children: [
-                _buildAICard('Darband Mountain Trail', 'Hiking • 4.8', 'Perfect for sunset', theme),
-                _buildAICard('Tajrish Bazaar', 'Local Food • 4.6', 'Try Gheymeh!', theme),
-              ],
-            ),
+        ),
+      ],
+    );
+  }
+
+  // AI Expanded
+  Widget _buildAIExpanded(ThemeData theme) {
+    return Column(
+      children: [
+        _buildTabHeader(Icons.auto_awesome, 'AI Suggested', Colors.purple),
+        Expanded(
+          child: ListView(
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            children: [
+              _buildAICard('Darband Mountain Trail', 'Hiking • 4.8', 'Perfect for sunset', theme),
+              _buildAICard('Tajrish Bazaar', 'Local Food • 4.6', 'Try Gheymeh!', theme),
+            ],
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
@@ -441,9 +482,7 @@ class _NavigationMapScreenState extends State<NavigationMapScreen> with TickerPr
       ),
       trailing: IconButton(
         icon: const Icon(Icons.navigation),
-        onPressed: () {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Navigating...')));
-        },
+        onPressed: () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Navigating...'))),
       ),
     );
   }
@@ -451,8 +490,6 @@ class _NavigationMapScreenState extends State<NavigationMapScreen> with TickerPr
   @override
   void didUpdateWidget(covariant NavigationMapScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.isDarkMode != oldWidget.isDarkMode) {
-      setState(() {});
-    }
+    if (widget.isDarkMode != oldWidget.isDarkMode) setState(() {});
   }
 }
