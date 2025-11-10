@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_tourai/customer_account_screen.dart';
 import 'theme.dart';
 import 'navigation_map_screen.dart';
 import 'travel_plan_screen.dart';
@@ -66,8 +67,8 @@ class _MainScreenState extends State<MainScreen> {
         isDarkMode: widget.isDarkMode,
         onThemeChanged: widget.onThemeChanged,
       ),
-      const Center(child: Text('رزروها - به زودی')),
-      const Center(child: Text('پروفایل - به زودی')),
+      CustomerAccountScreen(), // صفحه سوم
+      // فقط 3 صفحه داریم
     ];
   }
 
@@ -78,7 +79,7 @@ class _MainScreenState extends State<MainScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: _screens[_selectedIndex],
+      body: _screens[_selectedIndex], // فقط 0, 1, 2
       bottomNavigationBar: BottomNavigationBar(
         type: BottomNavigationBarType.fixed,
         currentIndex: _selectedIndex,
@@ -89,8 +90,8 @@ class _MainScreenState extends State<MainScreen> {
         items: const [
           BottomNavigationBarItem(icon: Icon(Icons.edit), label: 'برنامه‌ریزی'),
           BottomNavigationBarItem(icon: Icon(Icons.map), label: 'نقشه'),
-          BottomNavigationBarItem(icon: Icon(Icons.bookmark), label: 'رزروها'),
-          BottomNavigationBarItem(icon: Icon(Icons.person), label: 'پروفایل'),
+          BottomNavigationBarItem(icon: Icon(Icons.account_circle), label: 'حساب کاربری'),
+          // فقط 3 تا!
         ],
       ),
     );
