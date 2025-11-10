@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_tourai/cities_screen.dart';
 import 'package:flutter_tourai/customer_account_screen.dart';
 import 'theme.dart';
 import 'navigation_map_screen.dart';
@@ -67,8 +68,8 @@ class _MainScreenState extends State<MainScreen> {
         isDarkMode: widget.isDarkMode,
         onThemeChanged: widget.onThemeChanged,
       ),
-      CustomerAccountScreen(), // صفحه سوم
-      // فقط 3 صفحه داریم
+      CitiesScreen(),
+      CustomerAccountScreen(),
     ];
   }
 
@@ -90,7 +91,7 @@ class _MainScreenState extends State<MainScreen> {
         items: const [
           BottomNavigationBarItem(icon: Icon(Icons.edit), label: 'برنامه‌ریزی'),
           BottomNavigationBarItem(icon: Icon(Icons.map), label: 'نقشه'),
-          BottomNavigationBarItem(icon: Icon(Icons.account_circle), label: 'حساب کاربری'),
+          BottomNavigationBarItem(icon: Icon(Icons.place), label: 'شهرها'),
           // فقط 3 تا!
         ],
       ),
