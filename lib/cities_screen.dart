@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_tourai/city_detail_screen.dart';
 import 'theme.dart';
 import 'settings_screen.dart';
 
@@ -211,8 +212,11 @@ class _CitiesScreenState extends State<CitiesScreen> {
       child: InkWell(
         borderRadius: BorderRadius.circular(16),
         onTap: () {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('جزئیات ${city['name']}')),
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => CityDetailScreen(city: city),
+            ),
           );
         },
         child: Column(
