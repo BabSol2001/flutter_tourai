@@ -6,6 +6,7 @@ import 'dart:convert';
 import 'theme.dart';
 import 'settings_screen.dart';
 import 'help_screen.dart';
+import 'package:geolocator/geolocator.dart';
 
 class NavigationMapScreen extends StatefulWidget {
   final bool isDarkMode;
@@ -21,8 +22,23 @@ class NavigationMapScreen extends StatefulWidget {
   State<NavigationMapScreen> createState() => _NavigationMapScreenState();
 }
 
-class _NavigationMapScreenState extends State<NavigationMapScreen> with TickerProviderStateMixin {
+class _NavigationMapScreenState extends State<NavigationMapScreen>
+    with TickerProviderStateMixin {
   final MapController _mapController = MapController();
+
+  Position? _currentPosition;
+  bool _isLoadingLocation = true;
+  Marker? _currentLocationMarker;
+
+  double _currentMapRotation = 0.0;
+
+  final TextEditingController _originController = TextEditingController();
+  final TextEditingController _destinationController = TextEditingController();
+
+  LatLng? _originPoint;
+
+  late AnimationController _rotationController;
+  late Animation<double> _rotationAnimation;
 
   late AnimationController _searchController;
   late Animation<double> _searchAnimation;
@@ -36,20 +52,187 @@ class _NavigationMapScreenState extends State<NavigationMapScreen> with TickerPr
   late Animation<double> _aiHeight;
   bool _isAIExpanded = false;
 
-  int _selectedIndex = 1;
+  // جدید: انیمیشن برای کارت مسیریابی شناور
+  late AnimationController _routingController;
+  late Animation<double> _routingHeight;
+  bool _isRoutingExpanded = false;
 
+  int _selectedIndex = 1;
   List<Polyline> _routePolylines = [];
   bool _isLoadingRoute = false;
 
-  final LatLng _startPoint = LatLng(35.6892, 51.3890); // انقلاب
-  final LatLng _endPoint = LatLng(35.8116, 51.4272);   // تجریش
+  final List<Marker> _markers = [
+    Marker(point: LatLng(35.6892, 51.3890), width: 40, height: 40, child: const Icon(Icons.location_on, color: Colors.red, size: 40)),
+    Marker(point: LatLng(48.8566, 2.3522), width: 40, height: 40, child: const Icon(Icons.location_on, color: AppTheme.primary, size: 40)),
+    Marker(point: LatLng(35.6762, 139.6503), width: 40, height: 40, child: const Icon(Icons.location_on, color: Colors.orange, size: 40)),
+  ];
 
-  Future<void> _fetchRoute() async {
-    if (_isLoadingRoute) return;
+  @override
+  void initState() {
+    super.initState();
+
+    _mapController.mapEventStream.listen((_) {
+      _currentMapRotation = _mapController.camera.rotation;
+    });
+
+    _rotationController = AnimationController(duration: const Duration(milliseconds: 750), vsync: this);
+    _rotationAnimation = Tween<double>(begin: 0, end: 0).animate(CurvedAnimation(parent: _rotationController, curve: Curves.easeOutCubic));
+    _rotationAnimation.addListener(() {
+      _mapController.rotate(_rotationAnimation.value);
+      _currentMapRotation = _rotationAnimation.value;
+    });
+
+    _searchController = AnimationController(duration: const Duration(milliseconds: 300), vsync: this);
+    _exploreController = AnimationController(duration: const Duration(milliseconds: 300), vsync: this);
+    _aiController = AnimationController(duration: const Duration(milliseconds: 300), vsync: this);
+
+    // جدید: کنترلر برای کارت مسیریابی
+    _routingController = AnimationController(duration: const Duration(milliseconds: 350), vsync: this);
+    _routingHeight = Tween<double>(begin: 70, end: 420).animate(CurvedAnimation(parent: _routingController, curve: Curves.easeOutCubic));
+
+    _searchAnimation = Tween<double>(begin: 56, end: 0).animate(CurvedAnimation(parent: _searchController, curve: Curves.easeInOut));
+    _exploreHeight = Tween<double>(begin: 60, end: 280).animate(CurvedAnimation(parent: _exploreController, curve: Curves.easeInOut));
+    _aiHeight = Tween<double>(begin: 60, end: 280).animate(CurvedAnimation(parent: _aiController, curve: Curves.easeInOut));
+
+    _getCurrentLocation();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _searchAnimation = Tween<double>(
+      begin: 56,
+      end: MediaQuery.of(context).size.width - 32,
+    ).animate(CurvedAnimation(parent: _searchController, curve: Curves.easeInOut));
+  }
+
+  @override
+  void dispose() {
+    _originController.dispose();
+    _destinationController.dispose();
+    _rotationController.dispose();
+    _searchController.dispose();
+    _exploreController.dispose();
+    _aiController.dispose();
+    _routingController.dispose(); // جدید
+    super.dispose();
+  }
+
+  void _resetNorth() {
+    _rotationAnimation = Tween<double>(begin: _currentMapRotation, end: 0.0).animate(
+      CurvedAnimation(parent: _rotationController, curve: Curves.easeOutCubic),
+    );
+    _rotationController.reset();
+    _rotationController.forward();
+  }
+
+  Future<void> _getCurrentLocation() async {
+    bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('لطفاً GPS را روشن کنید')));
+      setState(() => _isLoadingLocation = false);
+      return;
+    }
+
+    LocationPermission permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+      if (permission == LocationPermission.denied) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('اجازه دسترسی به موقعیت داده نشد')));
+        setState(() => _isLoadingLocation = false);
+        return;
+      }
+    }
+
+    if (permission == LocationPermission.deniedForever) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('اجازه موقعیت برای همیشه رد شده!')));
+      setState(() => _isLoadingLocation = false);
+      return;
+    }
+
+    try {
+      Position position = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
+      setState(() {
+        _currentPosition = position;
+        _isLoadingLocation = false;
+        _currentLocationMarker = Marker(
+          point: LatLng(position.latitude, position.longitude),
+          width: 50,
+          height: 50,
+          child: const Icon(Icons.my_location, color: Colors.blue, size: 40, shadows: [Shadow(color: Colors.black54, blurRadius: 10)]),
+        );
+      });
+      _mapController.move(LatLng(position.latitude, position.longitude), 15.0);
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('خطا در گرفتن موقعیت: $e')));
+      setState(() => _isLoadingLocation = false);
+    }
+  }
+
+  void _fitBounds(List<LatLng> points) {
+    if (points.isEmpty) return;
+    double south = points[0].latitude, north = points[0].latitude;
+    double west = points[0].longitude, east = points[0].longitude;
+
+    for (var p in points) {
+      if (p.latitude < south) south = p.latitude;
+      if (p.latitude > north) north = p.latitude;
+      if (p.longitude < west) west = p.longitude;
+      if (p.longitude > east) east = p.longitude;
+    }
+
+    _mapController.fitCamera(CameraFit.bounds(
+      bounds: LatLngBounds(LatLng(south, west), LatLng(north, east)),
+      padding: const EdgeInsets.all(100),
+    ));
+  }
+
+  void _onItemTapped(int index) => setState(() => _selectedIndex = index);
+
+  // جدید: باز کردن کارت مسیریابی شناور (مثل AI Suggested)
+  void _toggleRoutingCard() {
+    setState(() {
+      _isRoutingExpanded = !_isRoutingExpanded;
+      _isRoutingExpanded ? _routingController.forward() : _routingController.reverse();
+
+      // وقتی مسیریابی باز شد، بقیه رو ببند
+      if (_isRoutingExpanded) {
+        if (_isExploreExpanded) {
+          _isExploreExpanded = false;
+          _exploreController.reverse();
+        }
+        if (_isAIExpanded) {
+          _isAIExpanded = false;
+          _aiController.reverse();
+        }
+      }
+    });
+
+    if (_isRoutingExpanded) {
+      _originController.text = "موقعیت فعلی";
+      _destinationController.clear();
+      _originPoint = _currentPosition != null
+          ? LatLng(_currentPosition!.latitude, _currentPosition!.longitude)
+          : null;
+    }
+  }
+
+  Future<void> _startRouting() async {
+    if (_originPoint == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('موقعیت فعلی در دسترس نیست')));
+      return;
+    }
+    if (_destinationController.text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('لطفاً مقصد را وارد کنید')));
+      return;
+    }
+
     setState(() => _isLoadingRoute = true);
 
+    final LatLng destination = LatLng(35.7446, 51.3753); // برج میلاد
+
     final url = Uri.parse(
-      'http://10.0.2.2:8000/osm/smart-route/?start_lat=${_startPoint.latitude}&start_lon=${_startPoint.longitude}&end_lat=${_endPoint.latitude}&end_lon=${_endPoint.longitude}'
+      'http://10.0.2.2:8000/osm/smart-route/?start_lat=${_originPoint!.latitude}&start_lon=${_originPoint!.longitude}&end_lat=${destination.latitude}&end_lon=${destination.longitude}'
     );
 
     try {
@@ -73,73 +256,17 @@ class _NavigationMapScreenState extends State<NavigationMapScreen> with TickerPr
         setState(() {
           _routePolylines = polylines;
           if (polylines.isNotEmpty) _fitBounds(polylines.first.points);
+          _isRoutingExpanded = false;
+          _routingController.reverse();
         });
 
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("${data['routes'].length} مسیر دریافت شد!")),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("مسیر با موفقیت رسم شد!")));
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('خطا در دریافت مسیر')));
     } finally {
       setState(() => _isLoadingRoute = false);
     }
-  }
-
-  void _fitBounds(List<LatLng> points) {
-    if (points.isEmpty) return;
-    double south = points[0].latitude, north = points[0].latitude;
-    double west = points[0].longitude, east = points[0].longitude;
-
-    for (var p in points) {
-      if (p.latitude < south) south = p.latitude;
-      if (p.latitude > north) north = p.latitude;
-      if (p.longitude < west) west = p.longitude;
-      if (p.longitude > east) east = p.longitude;
-    }
-
-    _mapController.fitCamera(CameraFit.bounds(
-      bounds: LatLngBounds(LatLng(south, west), LatLng(north, east)),
-      padding: const EdgeInsets.all(100),
-    ));
-  }
-
-  final List<Marker> _markers = [
-    Marker(point: LatLng(35.6892, 51.3890), width: 40, height: 40, child: const Icon(Icons.location_on, color: Colors.red, size: 40)),
-    Marker(point: LatLng(48.8566, 2.3522), width: 40, height: 40, child: const Icon(Icons.location_on, color: AppTheme.primary, size: 40)),
-    Marker(point: LatLng(35.6762, 139.6503), width: 40, height: 40, child: const Icon(Icons.location_on, color: Colors.orange, size: 40)),
-  ];
-
-  @override
-  void initState() {
-    super.initState();
-    _searchController = AnimationController(duration: const Duration(milliseconds: 300), vsync: this);
-    _searchAnimation = Tween<double>(begin: 56, end: 0).animate(CurvedAnimation(parent: _searchController, curve: Curves.easeInOut));
-
-    _exploreController = AnimationController(duration: const Duration(milliseconds: 300), vsync: this);
-    _exploreHeight = Tween<double>(begin: 60, end: 280).animate(CurvedAnimation(parent: _exploreController, curve: Curves.easeInOut));
-
-    _aiController = AnimationController(duration: const Duration(milliseconds: 300), vsync: this);
-    _aiHeight = Tween<double>(begin: 60, end: 280).animate(CurvedAnimation(parent: _aiController, curve: Curves.easeInOut));
-  }
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    _searchAnimation = Tween<double>(begin: 56, end: MediaQuery.of(context).size.width - 32)
-        .animate(CurvedAnimation(parent: _searchController, curve: Curves.easeInOut));
-  }
-
-  @override
-  void dispose() {
-    _searchController.dispose();
-    _exploreController.dispose();  // درست شد!
-    _aiController.dispose();
-    super.dispose();
-  }
-
-  void _onItemTapped(int index) {
-    setState(() => _selectedIndex = index);
   }
 
   @override
@@ -172,95 +299,125 @@ class _NavigationMapScreenState extends State<NavigationMapScreen> with TickerPr
       ),
       body: Stack(
         children: [
-          // نقشه — همیشه زیر همه چیز
           FlutterMap(
             mapController: _mapController,
-            options: MapOptions(initialCenter: LatLng(35.6892, 51.3890), initialZoom: 12),
+            options: MapOptions(
+              initialCenter: _currentPosition != null
+                  ? LatLng(_currentPosition!.latitude, _currentPosition!.longitude)
+                  : LatLng(35.6892, 51.3890),
+              initialZoom: 15,
+              interactionOptions: const InteractionOptions(flags: InteractiveFlag.all),
+            ),
             children: [
-              TileLayer(
-                urlTemplate: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
-                userAgentPackageName: 'com.tourai.app',
-              ),
+              TileLayer(urlTemplate: "https://tile.openstreetmap.org/{z}/{x}/{y}.png", userAgentPackageName: 'com.tourai.app'),
               PolylineLayer(polylines: _routePolylines),
-              MarkerLayer(markers: _markers),
+              MarkerLayer(markers: [if (_currentLocationMarker != null) _currentLocationMarker!, ..._markers]),
             ],
           ),
 
-          // Explore + AI Cards
+          // وقتی کارت مسیریابی بازه، نقشه کمی تیره بشه
+          if (_isRoutingExpanded || _isExploreExpanded || _isAIExpanded)
+            Container(color: Colors.black.withOpacity(0.5)),
+
+          if (_isLoadingLocation)
+            Positioned(
+            top: 100,
+            left: 0,
+            right: 0,
+            child: Center(
+              child: Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: const [
+                      SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)),
+                      SizedBox(width: 12),
+                      Text("در حال گرفتن موقعیت شما..."),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+
+          // کارت مسیریابی شناور — دقیقاً مثل AI Suggested
           Positioned(
             bottom: 100,
             left: 0,
             right: 0,
             child: Column(
               children: [
-                // Explore Card
+                // Explore Nearby
                 AnimatedBuilder(
                   animation: _exploreHeight,
-                  builder: (context, child) {
-                    return GestureDetector(
-                      onTap: () {
-                        setState(() {
-                          _isExploreExpanded = !_isExploreExpanded;
-                          if (_isExploreExpanded) {
-                            _exploreController.forward();
-                            if (_isAIExpanded) {
-                              _isAIExpanded = false;
-                              _aiController.reverse();
-                            }
-                          } else {
-                            _exploreController.reverse();
-                          }
-                        });
-                      },
-                      child: Container(
-                        height: _exploreHeight.value,
-                        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: theme.cardColor.withOpacity(0.95),
-                          borderRadius: BorderRadius.circular(20),
-                          boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 10, offset: Offset(0, 2))],
-                        ),
-                        child: _isExploreExpanded
-                            ? _buildExploreExpanded(theme)
-                            : _buildTabHeader(Icons.explore, 'Explore Nearby', AppTheme.primary),
+                  builder: (context, child) => GestureDetector(
+                    onTap: () => setState(() {
+                      _isExploreExpanded = !_isExploreExpanded;
+                      _isExploreExpanded ? _exploreController.forward() : _exploreController.reverse();
+                      if (_isExploreExpanded) {
+                        _isAIExpanded = false;
+                        _aiController.reverse();
+                        _isRoutingExpanded = false;
+                        _routingController.reverse();
+                      }
+                    }),
+                    child: Container(
+                      height: _exploreHeight.value,
+                      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: theme.cardColor.withOpacity(0.7),
+                        borderRadius: BorderRadius.circular(20),
+                        boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 10, offset: Offset(0, 2))],
                       ),
-                    );
-                  },
+                      child: _isExploreExpanded ? _buildExploreExpanded(theme) : _buildTabHeader(Icons.explore, 'Explore Nearby', AppTheme.primary),
+                    ),
+                  ),
                 ),
 
-                // AI Card
+                // AI Suggested
                 AnimatedBuilder(
                   animation: _aiHeight,
-                  builder: (context, child) {
-                    return GestureDetector(
-                      onTap: () {
-                        setState(() {
-                          _isAIExpanded = !_isAIExpanded;
-                          if (_isAIExpanded) {
-                            _aiController.forward();
-                            if (_isExploreExpanded) {
-                              _isExploreExpanded = false;
-                              _exploreController.reverse();
-                            }
-                          } else {
-                            _aiController.reverse();
-                          }
-                        });
-                      },
-                      child: Container(
-                        height: _aiHeight.value,
-                        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: theme.cardColor.withOpacity(0.95),
-                          borderRadius: BorderRadius.circular(20),
-                          boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 10, offset: Offset(0, 2))],
-                        ),
-                        child: _isAIExpanded
-                            ? _buildAIExpanded(theme)
-                            : _buildTabHeader(Icons.auto_awesome, 'AI Suggested', Colors.purple),
+                  builder: (context, child) => GestureDetector(
+                    onTap: () => setState(() {
+                      _isAIExpanded = !_isAIExpanded;
+                      _isAIExpanded ? _aiController.forward() : _aiController.reverse();
+                      if (_isAIExpanded) {
+                        _isExploreExpanded = false;
+                        _exploreController.reverse();
+                        _isRoutingExpanded = false;
+                        _routingController.reverse();
+                      }
+                    }),
+                    child: Container(
+                      height: _aiHeight.value,
+                      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: theme.cardColor.withOpacity(0.7),
+                        borderRadius: BorderRadius.circular(20),
+                        boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 10, offset: Offset(0, 2))],
                       ),
-                    );
-                  },
+                      child: _isAIExpanded ? _buildAIExpanded(theme) : _buildTabHeader(Icons.auto_awesome, 'AI Suggested', Colors.purple),
+                    ),
+                  ),
+                ),
+
+                // کارت جدید: کارت مسیریابی شناور
+                AnimatedBuilder(
+                  animation: _routingHeight,
+                  builder: (context, child) => GestureDetector(
+                    onTap: _toggleRoutingCard,
+                    child: Container(
+                      height: _routingHeight.value,
+                      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: theme.cardColor.withOpacity(0.7),
+                        borderRadius: BorderRadius.circular(20),
+                        boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 12, offset: Offset(0, 4))],
+                      ),
+                      child: _isRoutingExpanded ? _buildRoutingCard(theme) : _buildTabHeader(Icons.directions, 'مسیریابی سریع', AppTheme.primary),
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -274,62 +431,70 @@ class _NavigationMapScreenState extends State<NavigationMapScreen> with TickerPr
             child: Center(
               child: AnimatedBuilder(
                 animation: _searchAnimation,
-                builder: (context, child) {
-                  return GestureDetector(
-                    onTap: () {
-                      setState(() {
-                        _isSearchExpanded = !_isSearchExpanded;
-                        _isSearchExpanded ? _searchController.forward() : _searchController.reverse();
-                      });
-                    },
-                    child: Container(
-                      width: _searchAnimation.value == 0 ? 56 : _searchAnimation.value,
-                      height: 56,
-                      margin: const EdgeInsets.symmetric(horizontal: 16),
-                      decoration: BoxDecoration(
-                        color: theme.cardColor.withOpacity(0.95),
-                        borderRadius: BorderRadius.circular(28),
-                        boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 10)],
-                      ),
-                      child: _isSearchExpanded
-                          ? Row(
-                              children: [
-                                const SizedBox(width: 16),
-                                const Icon(Icons.search),
-                                const SizedBox(width: 8),
-                                const Expanded(child: TextField(decoration: InputDecoration(hintText: 'جستجو...', border: InputBorder.none))),
-                                IconButton(icon: const Icon(Icons.tune), onPressed: () {}),
-                                IconButton(icon: const Icon(Icons.close), onPressed: () => setState(() => _isSearchExpanded = false)),
-                              ],
-                            )
-                          : const Center(child: Icon(Icons.search)),
+                builder: (context, child) => GestureDetector(
+                  onTap: () {
+                    setState(() => _isSearchExpanded = !_isSearchExpanded);
+                    _isSearchExpanded ? _searchController.forward() : _searchController.reverse();
+                  },
+                  child: Container(
+                    width: _searchAnimation.value == 0 ? 56 : _searchAnimation.value,
+                    height: 56,
+                    margin: const EdgeInsets.symmetric(horizontal: 16),
+                    decoration: BoxDecoration(
+                      color: theme.cardColor.withOpacity(0.70),
+                      borderRadius: BorderRadius.circular(28),
+                      boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 10)],
                     ),
-                  );
-                },
+                    child: _isSearchExpanded
+                        ? Row(children: [
+                            const SizedBox(width: 16),
+                            const Icon(Icons.search),
+                            const SizedBox(width: 8),
+                            const Expanded(child: TextField(decoration: InputDecoration(hintText: 'جستجو...', border: InputBorder.none))),
+                            IconButton(icon: const Icon(Icons.tune), onPressed: () {}),
+                            IconButton(icon: const Icon(Icons.close), onPressed: () => setState(() => _isSearchExpanded = false)),
+                          ])
+                        : const Center(child: Icon(Icons.search)),
+                  ),
+                ),
               ),
             ),
           ),
 
-          // دکمه مسیریابی
+          // دکمه موقعیت فعلی + دکمه قطب‌نما — هر جا بخوای می‌تونی بذاریشون!
           Positioned(
-            bottom: 180,
-            right: 16,
-            child: FloatingActionButton(
-              backgroundColor: AppTheme.primary,
-              heroTag: "route_fab",
-              onPressed: _isLoadingRoute ? null : _fetchRoute,
-              child: _isLoadingRoute
-                  ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 3))
-                  : const Icon(Icons.directions, size: 32),
+            bottom: 10, // بهتره یه کم بالاتر باشه که با کارت‌ها تداخل نکنه
+            left: 0,
+            right: 0,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                // دکمه قطب‌نما
+                FloatingActionButton(
+                  backgroundColor: Colors.white,
+                  foregroundColor: Colors.black87,
+                  elevation: 6,
+                  heroTag: "north_fab",
+                  onPressed: _resetNorth,
+                  child: const Icon(Icons.explore, size: 30),
+                ),
+
+                // فاصله فقط ۵ واحد بین دو دکمه
+                const SizedBox(width: 5),
+
+                // دکمه موقعیت فعلی
+                FloatingActionButton(
+                  backgroundColor: const Color.fromARGB(221, 0, 0, 0),
+                  foregroundColor: Colors.white,
+                  elevation: 8,
+                  heroTag: "location_fab",
+                  onPressed: _getCurrentLocation,
+                  child: const Icon(Icons.my_location, size: 30),
+                ),
+              ],
             ),
           ),
         ],
-      ),
-
-      floatingActionButton: FloatingActionButton(
-        backgroundColor: AppTheme.primary,
-        onPressed: () => _mapController.move(LatLng(35.6892, 51.3890), 15),
-        child: const Icon(Icons.my_location),
       ),
 
       bottomNavigationBar: BottomNavigationBar(
@@ -343,6 +508,55 @@ class _NavigationMapScreenState extends State<NavigationMapScreen> with TickerPr
           BottomNavigationBarItem(icon: Icon(Icons.map), label: 'Map'),
           BottomNavigationBarItem(icon: Icon(Icons.bookmark), label: 'Bookings'),
           BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profile'),
+        ],
+      ),
+    );
+  }
+
+  // جدید: کارت مسیریابی شناور
+  Widget _buildRoutingCard(ThemeData theme) {
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        children: [
+          _buildTabHeader(Icons.directions, 'مسیریابی سریع', AppTheme.primary),
+          const SizedBox(height: 16),
+          TextField(
+            controller: _originController,
+            readOnly: true,
+            decoration: InputDecoration(
+              hintText: "مبدا",
+              prefixIcon: const Icon(Icons.my_location, color: AppTheme.primary),
+              filled: true,
+              fillColor: Colors.grey[100],
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+              suffixIcon : const Icon(Icons.location_on, color: AppTheme.primary),
+              suffixIconConstraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+            ),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _destinationController,
+            decoration: InputDecoration(
+              hintText: "مقصد را وارد کنید...",
+              prefixIcon: const Icon(Icons.location_on, color: Colors.red),
+              filled: true,
+              fillColor: Colors.grey[100],
+              border: OutlineInputBorder(borderSide: BorderSide.none, borderRadius: BorderRadius.circular(16)),
+            ),
+          ),
+          const SizedBox(height: 20),
+          SizedBox(
+            width: double.infinity,
+            height: 56,
+            child: ElevatedButton(
+              onPressed: _isLoadingRoute ? null : _startRouting,
+              style: ElevatedButton.styleFrom(backgroundColor: AppTheme.primary, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
+              child: _isLoadingRoute
+                  ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 3))
+                  : const Text("شروع مسیریابی", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            ),
+          ),
         ],
       ),
     );
