@@ -36,6 +36,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final cardColor = theme.cardTheme.color;
 
     return Scaffold(
+      
       backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
         backgroundColor: theme.appBarTheme.backgroundColor,
