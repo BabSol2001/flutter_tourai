@@ -55,11 +55,6 @@ class _NavigationMapScreenState extends State<NavigationMapScreen>
   String _selectedEngine = "valhalla";
   String _selectedMode = "auto";
 
-  // برای جستجوی ساده نقطه (نه مسیریابی)
-  final TextEditingController _searchController = TextEditingController();
-  bool _isSearchingPoint = false;
-  Marker? _tempSearchMarker;
-
   static const String baseUrl = "http://192.168.0.105:8000"; // IP خودت رو بذار
 
   final List<Map<String, dynamic>> transportModes = [
@@ -104,7 +99,6 @@ class _NavigationMapScreenState extends State<NavigationMapScreen>
     _destinationController.dispose();
     _rotationController.dispose();
     _routingController.dispose();
-    _searchController.dispose();
     super.dispose();
   }
 
@@ -354,109 +348,6 @@ class _NavigationMapScreenState extends State<NavigationMapScreen>
     ));
   }
 
-  // جستجوی ساده نقطه روی نقشه (بدون مسیریابی)
-  Future<void> _searchPoint(String query) async {
-    if (query.trim().isEmpty) return;
-    setState(() => _isSearchingPoint = true);
-
-    final url = Uri.parse(
-      'https://nominatim.openstreetmap.org/search?q=${Uri.encodeComponent(query)}&format=json&limit=1&accept-language=de,en'
-    );
-
-    try {
-      final response = await http.get(url, headers: {'User-Agent': 'TourAI-App/1.0'}).timeout(const Duration(seconds: 10));
-      if (response.statusCode == 200) {
-        final List data = json.decode(response.body);
-        if (data.isNotEmpty) {
-          final lat = double.parse(data[0]['lat']);
-          final lon = double.parse(data[0]['lon']);
-          final displayName = data[0]['display_name'] as String;
-          final shortName = displayName.split(',').first.trim();
-
-          final point = LatLng(lat, lon);
-
-          setState(() {
-            _tempSearchMarker = Marker(
-              point: point,
-              width: 50,
-              height: 50,
-              child: const Icon(Icons.location_searching, color: Colors.purple, size: 50),
-            );
-          });
-
-          _mapController.move(point, 16);
-          _showSnackBar("پیدا شد: $shortName", success: true);
-
-          // بعد ۱۰ ثانیه مارکر موقت پاک بشه
-          Future.delayed(const Duration(seconds: 10), () {
-            if (mounted) {
-              setState(() => _tempSearchMarker = null);
-            }
-          });
-        } else {
-          _showSnackBar("مکانی پیدا نشد");
-        }
-      }
-    } catch (e) {
-      _showSnackBar("خطا در جستجو");
-    } finally {
-      if (mounted) setState(() => _isSearchingPoint = false);
-    }
-  }
-
-  void _openSearchSheet() {
-    _searchController.clear();
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        height: 220,
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            children: [
-              const Text("جستجوی مکان", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 16),
-              TextField(
-                controller: _searchController,
-                autofocus: true,
-                decoration: InputDecoration(
-                  hintText: "نام مکان، آدرس یا نقطه معروف...",
-                  prefixIcon: const Icon(Icons.search),
-                  suffixIcon: _isSearchingPoint
-                      ? const Padding(padding: EdgeInsets.all(12), child: CircularProgressIndicator(strokeWidth: 2))
-                      : IconButton(icon: const Icon(Icons.clear), onPressed: () => _searchController.clear()),
-                  filled: true,
-                  fillColor: Colors.grey[100],
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
-                ),
-                onSubmitted: (value) {
-                  _searchPoint(value);
-                  Navigator.pop(context);
-                },
-              ),
-              const SizedBox(height: 16),
-              ElevatedButton.icon(
-                onPressed: () {
-                  _searchPoint(_searchController.text);
-                  Navigator.pop(context);
-                },
-                icon: const Icon(Icons.search),
-                label: const Text("جستجو"),
-                style: ElevatedButton.styleFrom(minimumSize: const Size(double.infinity, 50)),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
   Future<void> _startRouting() async {
 
     // اگر فقط متن نوشته شده و مختصات نداریم → اول جستجو کن!
@@ -590,16 +481,11 @@ class _NavigationMapScreenState extends State<NavigationMapScreen>
               onTap: (_, p) => _onMapTapped(p),
             ),
             children: [
-              TileLayer(
-                urlTemplate: "https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png",
-                subdomains: const ['a', 'b'],
-                userAgentPackageName: 'com.tourai.app',
-              ),
+              TileLayer(urlTemplate: "https://tile.openstreetmap.org/{z}/{x}/{y}.png", userAgentPackageName: 'com.example.app'),
               PolylineLayer(polylines: _routePolylines),
               MarkerLayer(markers: [
                 if (_currentLocationMarker != null) _currentLocationMarker!,
                 if (_destinationMarker != null) _destinationMarker!,
-                if (_tempSearchMarker != null) _tempSearchMarker!,
               ]),
             ],
           ),
@@ -627,57 +513,13 @@ class _NavigationMapScreenState extends State<NavigationMapScreen>
           ),
 
           // دکمه‌های پایین
-          // دکمه‌های شناور پایین راست (جدید + مرتب)
           Positioned(
-            bottom: 20,
-            right: 16,
-            child: Column(
-              children: [
-
-                // دکمه جستجوی مکان (جدید - بالای همه)
-                FloatingActionButton(
-                  heroTag: "search_point",
-                  backgroundColor: Colors.white,
-                  foregroundColor: Colors.black87,
-                  elevation: 6,
-                  onPressed: _openSearchSheet,
-                  child: const Icon(Icons.search, size: 28),
-                ),
-                const SizedBox(height: 12),
-
-                // دکمه مسیریابی (باز کردن کارت)
-                FloatingActionButton.extended(
-                  heroTag: "open_routing",
-                  backgroundColor: Colors.blue,
-                  foregroundColor: Colors.white,
-                  elevation: 8,
-                  icon: const Icon(Icons.directions),
-                  label: const Text("مسیریابی"),
-                  onPressed: _toggleRoutingCard,
-                ),
-                const SizedBox(height: 12),
-
-                // شمال کردن نقشه
-                FloatingActionButton(
-                  heroTag: "north",
-                  backgroundColor: Colors.white,
-                  elevation: 6,
-                  onPressed: _resetNorth,
-                  child: const Icon(Icons.explore, color: Colors.black87),
-                ),
-                const SizedBox(height: 12),
-
-                // موقعیت فعلی
-                FloatingActionButton(
-                  heroTag: "loc",
-                  backgroundColor: Colors.blue,
-                  foregroundColor: Colors.white,
-                  elevation: 8,
-                  onPressed: () => _getCurrentLocation(force: true),
-                  child: const Icon(Icons.my_location),
-                ),
-              ],
-            ),
+            bottom: 130,
+            child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+              FloatingActionButton(heroTag: "north", backgroundColor: Colors.white, onPressed: _resetNorth, child: const Icon(Icons.explore)),
+              const SizedBox(width: 16),
+              FloatingActionButton(heroTag: "loc", backgroundColor: Colors.blue, onPressed: () => _getCurrentLocation(force: true), child: const Icon(Icons.my_location)),
+            ]),
           ),
         ],
       ),
