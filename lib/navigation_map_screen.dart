@@ -6,7 +6,6 @@ import 'dart:convert';
 import 'dart:math' as math;
 import 'package:geolocator/geolocator.dart';
 
-// ویجت مسیریابی
 import 'navigation/widgets/routing_card.dart';
 
 class NavigationMapScreen extends StatefulWidget {
@@ -257,26 +256,25 @@ class _NavigationMapScreenState extends State<NavigationMapScreen>
     );
   }
 
-  // منوی جستجو از بالا — بدون کرش، بدون findAncestor
   void _openSearchFromFab() {
     _searchController.clear();
-    showGeneralDialog(
-      context: context,
-      barrierDismissible: true,
-      barrierLabel: "search_dialog",
-      barrierColor: Colors.black.withOpacity(0.5),
-      transitionDuration: const Duration(milliseconds: 320),
-      pageBuilder: (context, _, __) {
-        return _SearchTopSheet(state: this); // اینجوری state رو مستقیم پاس می‌دیم
-      },
-      transitionBuilder: (context, animation, secondaryAnimation, child) {
-        return SlideTransition(
-          position: Tween<Offset>(begin: const Offset(0, -1), end: Offset.zero)
-              .animate(CurvedAnimation(parent: animation, curve: Curves.easeOutCubic)),
-          child: child,
-        );
-      },
-    ).then((_) => _searchController.clear());
+    Future.delayed(const Duration(milliseconds: 100), () {
+      showGeneralDialog(
+        context: context,
+        barrierDismissible: true,
+        barrierLabel: "search_dialog",
+        barrierColor: Colors.black.withOpacity(0.5),
+        transitionDuration: const Duration(milliseconds: 320),
+        pageBuilder: (context, _, __) => _SearchTopSheet(state: this),
+        transitionBuilder: (context, animation, secondaryAnimation, child) {
+          return SlideTransition(
+            position: Tween<Offset>(begin: const Offset(0, -1), end: Offset.zero)
+                .animate(CurvedAnimation(parent: animation, curve: Curves.easeOutCubic)),
+            child: child,
+          );
+        },
+      ).then((_) => _searchController.clear());
+    });
   }
 
   @override
@@ -320,6 +318,7 @@ class _NavigationMapScreenState extends State<NavigationMapScreen>
             bottom: 20,
             right: 16,
             child: Column(
+              mainAxisSize: MainAxisSize.min,
               children: [
                 FloatingActionButton(
                   heroTag: "search",
@@ -328,18 +327,18 @@ class _NavigationMapScreenState extends State<NavigationMapScreen>
                   child: const Icon(Icons.search, color: Colors.black87),
                 ),
                 const SizedBox(height: 12),
-                FloatingActionButton(
+                FloatingActionButton.small(
                   heroTag: "north",
                   backgroundColor: Colors.white,
                   onPressed: _resetNorth,
-                  child: const Icon(Icons.explore),
+                  child: const Icon(Icons.explore, size: 20),
                 ),
                 const SizedBox(height: 12),
-                FloatingActionButton(
+                FloatingActionButton.small(
                   heroTag: "locate",
                   backgroundColor: Colors.blue,
                   onPressed: () => _getCurrentLocation(force: true),
-                  child: const Icon(Icons.my_location, color: Colors.white),
+                  child: const Icon(Icons.my_location, color: Colors.white, size: 20),
                 ),
               ],
             ),
@@ -388,7 +387,6 @@ class _NavigationMapScreenState extends State<NavigationMapScreen>
   }
 }
 
-// منوی مسیریابی از پایین
 class _RoutingBottomSheet extends StatelessWidget {
   const _RoutingBottomSheet();
 
@@ -435,89 +433,92 @@ class _RoutingBottomSheet extends StatelessWidget {
     );
   }
 }
-// منوی جستجو از بالا — ۱۰۰٪ بدون کرش
+
 class _SearchTopSheet extends StatelessWidget {
   final _NavigationMapScreenState state;
   const _SearchTopSheet({required this.state});
 
   @override
   Widget build(BuildContext context) {
-    return SafeArea(
-      child: Align(
-        alignment: Alignment.topCenter,
-        child: Container(
-          margin: const EdgeInsets.fromLTRB(16, 60, 16, 16),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(24),
-            boxShadow: [
-              BoxShadow(color: Colors.black.withOpacity(0.22), blurRadius: 20, offset: const Offset(0, 10)),
-            ],
-          ),
-          child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(width: 50, height: 5, decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(10))),
-                const SizedBox(height: 16),
-                const Text("جستجو و مسیریابی", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 20),
-
-                TextField(
-                  controller: state._searchController,
-                  autofocus: true,
-                  textInputAction: TextInputAction.search,
-                  decoration: InputDecoration(
-                    hintText: "نام مکان، آدرس یا نقطه معروف...",
-                    prefixIcon: const Icon(Icons.search),
-                    suffixIcon: state._isSearchingPoint
-                        ? const Padding(padding: EdgeInsets.all(8), child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)))
-                        : IconButton(icon: const Icon(Icons.clear), onPressed: () => state._searchController.clear()),
-                    filled: true,
-                    fillColor: Colors.grey[100],
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(18), borderSide: BorderSide.none),
-                  ),
-                  onSubmitted: (query) {
-                    if (query.trim().isNotEmpty) {
-                      state._searchPoint(query);
-                      Navigator.of(context).pop();
-                    }
-                  },
-                ),
-                const SizedBox(height: 20),
-
-                Row(
-                  children: [
-                    Expanded(
-                      child: ElevatedButton.icon(
-                        icon: const Icon(Icons.directions, color: Colors.white),
-                        label: const Text("مسیریابی"),
-                        style: ElevatedButton.styleFrom(backgroundColor: Colors.blue, padding: const EdgeInsets.symmetric(vertical: 15)),
-                        onPressed: () {
-                          Navigator.of(context).pop();
-                          state._openRoutingSheet();
-                        },
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: ElevatedButton.icon(
-                        icon: const Icon(Icons.location_on, color: Colors.white),
-                        label: const Text("جستجو"),
-                        style: ElevatedButton.styleFrom(backgroundColor: Colors.green, padding: const EdgeInsets.symmetric(vertical: 15)),
-                        onPressed: () {
-                          if (state._searchController.text.trim().isNotEmpty) {
-                            state._searchPoint(state._searchController.text);
-                            Navigator.of(context).pop();
-                          }
-                        },
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 10),
+    return Material(
+      color: Colors.transparent,
+      child: SafeArea(
+        child: Align(
+          alignment: Alignment.topCenter,
+          child: Container(
+            margin: const EdgeInsets.fromLTRB(16, 60, 16, 16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(24),
+              boxShadow: [
+                BoxShadow(color: Colors.black.withOpacity(0.22), blurRadius: 20, offset: const Offset(0, 10)),
               ],
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(width: 50, height: 5, decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(10))),
+                  const SizedBox(height: 16),
+                  const Text("جستجو و مسیریابی", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 20),
+
+                  TextField(
+                    controller: state._searchController,
+                    autofocus: true,
+                    textInputAction: TextInputAction.search,
+                    decoration: InputDecoration(
+                      hintText: "نام مکان، آدرس یا نقطه معروف...",
+                      prefixIcon: const Icon(Icons.search),
+                      suffixIcon: state._isSearchingPoint
+                          ? const Padding(padding: EdgeInsets.all(8), child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)))
+                          : IconButton(icon: const Icon(Icons.clear), onPressed: () => state._searchController.clear()),
+                      filled: true,
+                      fillColor: Colors.grey[100],
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(18), borderSide: BorderSide.none),
+                    ),
+                    onSubmitted: (query) {
+                      if (query.trim().isNotEmpty) {
+                        state._searchPoint(query);
+                        Navigator.of(context).pop();
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 20),
+
+                  Row(
+                    children: [
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          icon: const Icon(Icons.directions, color: Colors.white),
+                          label: const Text("مسیریابی"),
+                          style: ElevatedButton.styleFrom(backgroundColor: Colors.blue, padding: const EdgeInsets.symmetric(vertical: 15)),
+                          onPressed: () {
+                            Navigator.of(context).pop();
+                            state._openRoutingSheet();
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          icon: const Icon(Icons.location_on, color: Colors.white),
+                          label: const Text("جستجو"),
+                          style: ElevatedButton.styleFrom(backgroundColor: Colors.green, padding: const EdgeInsets.symmetric(vertical: 15)),
+                          onPressed: () {
+                            if (state._searchController.text.trim().isNotEmpty) {
+                              state._searchPoint(state._searchController.text);
+                              Navigator.of(context).pop();
+                            }
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                ],
+              ),
             ),
           ),
         ),

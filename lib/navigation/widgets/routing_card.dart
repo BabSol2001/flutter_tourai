@@ -7,8 +7,6 @@ class RoutingCardContent extends StatelessWidget {
   final TextEditingController destinationController;
   final LatLng? selectedDestination;
   final LatLng? originLatLng;
-  final bool isSearchingOrigin;
-  final bool isSearchingDestination;
   final bool isLoadingRoute;
   final String selectedMode;
   final Function(String) onModeChanged;
@@ -19,14 +17,12 @@ class RoutingCardContent extends StatelessWidget {
   final String modeName;
 
   const RoutingCardContent({
+    Key? key,
     required this.scrollController,
-    super.key,
     required this.originController,
     required this.destinationController,
     required this.selectedDestination,
     required this.originLatLng,
-    required this.isSearchingOrigin,
-    required this.isSearchingDestination,
     required this.isLoadingRoute,
     required this.selectedMode,
     required this.onModeChanged,
@@ -35,149 +31,134 @@ class RoutingCardContent extends StatelessWidget {
     required this.onClearOrigin,
     required this.onStartRouting,
     required this.modeName,
-  });
+  }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
-    return SingleChildScrollView(
+    return ListView(
       controller: scrollController,
-      physics: const ClampingScrollPhysics(
-        parent: AlwaysScrollableScrollPhysics(), // این خط باعث میشه وقتی کیبورد بازه، منو کاملاً بالا بیاد
-      ),
-      padding: const EdgeInsets.fromLTRB(20, 20, 20, 30),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // عنوان
-          const Row(
-            children: [
-              Icon(Icons.directions, color: Colors.blue, size: 28),
-              SizedBox(width: 10),
-              Text("مسیریابی هوشمند", style: TextStyle(fontSize: 19, fontWeight: FontWeight.bold)),
-            ],
-          ),
-          const SizedBox(height: 20),
+      padding: const EdgeInsets.all(20),
+      children: [
+        // عنوان
+        const Text(
+          "مسیریابی هوشمند",
+          style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+          textAlign: TextAlign.center,
+        ),
+        const SizedBox(height: 20),
 
-          // مبدا
-          TextField(
-            controller: originController,
-            decoration: InputDecoration(
-              hintText: "از کجا؟ (موقعیت فعلی)",
-              prefixIcon: const Icon(Icons.my_location, color: Colors.green),
-              suffixIcon: isSearchingOrigin
-                  ? const Padding(
-                      padding: EdgeInsets.all(10),
-                      child: SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)),
-                    )
-                  : (originLatLng != null
-                      ? IconButton(icon: const Icon(Icons.clear), onPressed: onClearOrigin)
-                      : null),
-              filled: true,
-              fillColor: Colors.green[50],
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(18),
-                borderSide: BorderSide.none,
-              ),
+        // مبدا
+        TextField(
+          controller: originController,
+          readOnly: true,
+          decoration: InputDecoration(
+            hintText: "مبدا",
+            prefixIcon: const Icon(Icons.my_location, color: Colors.blue),
+            suffixIcon: originLatLng != null
+                ? IconButton(icon: const Icon(Icons.clear), onPressed: onClearOrigin)
+                : null,
+            filled: true,
+            fillColor: Colors.grey[100],
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+          ),
+        ),
+        const SizedBox(height: 12),
+
+        // مقصد
+        TextField(
+          controller: destinationController,
+          readOnly: true,
+          decoration: InputDecoration(
+            hintText: "مقصد را انتخاب کنید",
+            prefixIcon: const Icon(Icons.location_on, color: Colors.red),
+            suffixIcon: selectedDestination != null
+                ? IconButton(icon: const Icon(Icons.clear), onPressed: onClearDestination)
+                : null,
+            filled: true,
+            fillColor: Colors.grey[100],
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+          ),
+        ),
+        const SizedBox(height: 16),
+
+        // دکمه جابجایی
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            IconButton(
+              onPressed: selectedDestination != null ? onSwap : null,
+              icon: const Icon(Icons.swap_vert, size: 32),
+              color: selectedDestination != null ? Colors.blue : Colors.grey,
             ),
-          ),
-          const SizedBox(height: 12),
+          ],
+        ),
+        const SizedBox(height: 16),
 
-          // مقصد
-          TextField(
-            controller: destinationController,
-            decoration: InputDecoration(
-              hintText: "کجا می‌خوای بری؟",
-              prefixIcon: const Icon(Icons.location_on, color: Colors.red),
-              suffixIcon: isSearchingDestination
-                  ? const Padding(
-                      padding: EdgeInsets.all(10),
-                      child: SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)),
-                    )
-                  : (selectedDestination != null
-                      ? IconButton(icon: const Icon(Icons.clear), onPressed: onClearDestination)
-                      : null),
-              filled: true,
-              fillColor: Colors.red[50],
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(18),
-                borderSide: BorderSide.none,
-              ),
-            ),
-          ),
+        // انتخاب نوع وسیله
+        const Text("نوع وسیله نقلیه:", style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+        const SizedBox(height: 12),
+        Wrap(
+          spacing: 12,
+          runSpacing: 12,
+          children: [
+            "auto", "motorcycle", "truck", "bicycle", "pedestrian"
+          ].map((mode) {
+            final isSelected = selectedMode == mode;
+            final name = {
+              "auto": "ماشین",
+              "motorcycle": "موتور",
+              "truck": "کامیون",
+              "bicycle": "دوچرخه",
+              "pedestrian": "پیاده",
+            }[mode]!;
+            final icon = {
+              "auto": Icons.directions_car,
+              "motorcycle": Icons.motorcycle,
+              "truck": Icons.local_shipping,
+              "bicycle": Icons.directions_bike,
+              "pedestrian": Icons.directions_walk,
+            }[mode]!;
 
-          const SizedBox(height: 16),
-          // دکمه سواپ
-          Align(
-            alignment: Alignment.centerRight,
-            child: GestureDetector(
-              onTap: onSwap,
+            return GestureDetector(
+              onTap: () => onModeChanged(mode),
               child: Container(
-                padding: const EdgeInsets.all(10),
-                decoration: const BoxDecoration(color: Colors.grey, shape: BoxShape.circle),
-                child: const Icon(Icons.swap_vert, color: Colors.white, size: 28),
-              ),
-            ),
-          ),
-
-          const SizedBox(height: 20),
-          // انتخاب وسیله نقلیه
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: [
-              {"mode": "auto", "icon": Icons.directions_car},
-              {"mode": "motorcycle", "icon": Icons.motorcycle},
-              {"mode": "truck", "icon": Icons.local_shipping},
-              {"mode": "bicycle", "icon": Icons.directions_bike},
-              {"mode": "pedestrian", "icon": Icons.directions_walk},
-            ].map((m) {
-              final bool isSelected = selectedMode == m["mode"];
-              return GestureDetector(
-                onTap: () => onModeChanged(m["mode"] as String),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 250),
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: isSelected ? Colors.blue : Colors.grey[200],
-                    shape: BoxShape.circle,
-                    boxShadow: isSelected
-                        ? [BoxShadow(color: Colors.blue.withOpacity(0.4), blurRadius: 12, offset: const Offset(0, 4))]
-                        : null,
-                  ),
-                  child: Icon(
-                    m["icon"] as IconData,
-                    color: isSelected ? Colors.white : Colors.black87,
-                    size: 30,
-                  ),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                decoration: BoxDecoration(
+                  color: isSelected ? Colors.blue : Colors.grey[200],
+                  borderRadius: BorderRadius.circular(30),
                 ),
-              );
-            }).toList(),
-          ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(icon, color: isSelected ? Colors.white : Colors.black87, size: 20),
+                    const SizedBox(width: 8),
+                    Text(name, style: TextStyle(color: isSelected ? Colors.white : Colors.black87)),
+                  ],
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+        const SizedBox(height: 24),
 
-          const SizedBox(height: 30),
-          // دکمه شروع مسیریابی
-          SizedBox(
-            width: double.infinity,
-            height: 58,
-            child: ElevatedButton.icon(
-              onPressed: isLoadingRoute || selectedDestination == null ? null : onStartRouting,
-              icon: isLoadingRoute
-                  ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                  : const Icon(Icons.navigation),
-              label: Text(
-                isLoadingRoute ? "در حال رسم مسیر..." : "شروع مسیریابی با $modeName",
-                style: const TextStyle(fontSize: 16),
-              ),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.blue,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-                elevation: 8,
-              ),
+        // دکمه شروع مسیریابی
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton.icon(
+            onPressed: selectedDestination == null ? null : isLoadingRoute ? null : onStartRouting,
+            icon: isLoadingRoute
+                ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                : const Icon(Icons.directions),
+            label: Text(isLoadingRoute ? "در حال رسم مسیر..." : "شروع مسیریابی با $modeName"),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.blue,
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
             ),
           ),
-          const SizedBox(height: 20),
-        ],
-      ),
+        ),
+        const SizedBox(height: 20),
+      ],
     );
   }
 }
