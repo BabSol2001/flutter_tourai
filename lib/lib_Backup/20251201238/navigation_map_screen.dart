@@ -6,8 +6,8 @@ import 'dart:convert';
 import 'dart:math' as math;
 import 'package:geolocator/geolocator.dart';
 
-// ویجت منوی مسیریابی از بالا (با ValueNotifier)
-import 'navigation/widgets/routing_card.dart';
+// ویجت منوی مسیریابی از بالا
+import 'navigation/widgets/routing_card.dart'; // این حالا RoutingTopPanel داره
 
 class NavigationMapScreen extends StatefulWidget {
   final bool isDarkMode;
@@ -47,16 +47,9 @@ class _NavigationMapScreenState extends State<NavigationMapScreen>
   String _selectedEngine = "valhalla";
   String _selectedMode = "auto";
 
-  final ValueNotifier<String> _modeNotifier = ValueNotifier<String>("auto");
-
   final TextEditingController _searchController = TextEditingController();
   bool _isSearchingPoint = false;
   Marker? _tempSearchMarker;
-
-  String? _pendingSearchText;
-
-  // فقط برای قابلیت جدید: انتخاب مقصد از روی نقشه
-  bool _isSelectingFromMap = false;
 
   static const String baseUrl = "http://192.168.0.105:8000";
 
@@ -72,19 +65,8 @@ class _NavigationMapScreenState extends State<NavigationMapScreen>
   void initState() {
     super.initState();
     _originController.text = "موقعیت فعلی";
-    _modeNotifier.value = _selectedMode;
     _setupAnimations();
     _getCurrentLocation();
-  }
-
-  @override
-  void dispose() {
-    _originController.dispose();
-    _destinationController.dispose();
-    _searchController.dispose();
-    _rotationController.dispose();
-    _modeNotifier.dispose();
-    super.dispose();
   }
 
   void _setupAnimations() {
@@ -100,6 +82,15 @@ class _NavigationMapScreenState extends State<NavigationMapScreen>
     });
   }
 
+  @override
+  void dispose() {
+    _originController.dispose();
+    _destinationController.dispose();
+    _searchController.dispose();
+    _rotationController.dispose();
+    super.dispose();
+  }
+
   void _resetNorth() {
     _rotationAnimation = Tween<double>(begin: _currentMapRotation, end: 0)
         .animate(CurvedAnimation(parent: _rotationController, curve: Curves.easeOutCubic));
@@ -110,20 +101,12 @@ class _NavigationMapScreenState extends State<NavigationMapScreen>
   Future<void> _getCurrentLocation({bool force = false}) async {
     setState(() => _isLoadingLocation = true);
     bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    if (!serviceEnabled) {
-      _showSnackBar("GPS خاموش است!");
-      setState(() => _isLoadingLocation = false);
-      return;
-    }
+    if (!serviceEnabled) return _showSnackBar("GPS خاموش است!");
 
     LocationPermission permission = await Geolocator.checkPermission();
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
-      if (permission == LocationPermission.denied) {
-        _showSnackBar("اجازه دسترسی به مکان داده نشد");
-        setState(() => _isLoadingLocation = false);
-        return;
-      }
+      if (permission == LocationPermission.denied) return setState(() => _isLoadingLocation = false);
     }
 
     try {
@@ -137,56 +120,41 @@ class _NavigationMapScreenState extends State<NavigationMapScreen>
           child: const Icon(Icons.my_location, color: Colors.blue, size: 40),
         );
       });
-
-      _mapController.move(LatLng(pos.latitude, pos.longitude), 16);
-      _showSnackBar("موقعیت شما بروز شد", success: true);
+      if (force) _mapController.move(LatLng(pos.latitude, pos.longitude), 15);
     } catch (e) {
-      _showSnackBar("خطا در گرفتن موقعیت");
       setState(() => _isLoadingLocation = false);
     }
   }
 
-  // تغییر مهم: حالا تشخیص میده حالت انتخاب از نقشه فعاله یا نه
   void _onMapTapped(LatLng point) {
-    if (_isSelectingFromMap) {
-      final coordsText = "${point.latitude.toStringAsFixed(6)}, ${point.longitude.toStringAsFixed(6)}";
+    setState(() {
+      _selectedDestination = point;
+      _destinationMarker = Marker(
+        point: point,
+        width: 50, height: 50,
+        child: const Icon(Icons.location_on, color: Colors.red, size: 50),
+      );
+    });
+    _reverseGeocode(point, isDestination: true);
+  }
 
-      setState(() {
-        _isSelectingFromMap = false;
-        _selectedDestination = point;
-        _destinationController.text = coordsText.length > 35 
-            ? "${coordsText.substring(0, 35)}..." 
-            : coordsText;
-
-        _destinationMarker = Marker(
-          point: point,
-          width: 50,
-          height: 50,
-          child: const Icon(Icons.location_on, color: Colors.red, size: 50),
-        );
-
-        // مهم: مختصات رو موقت نگه می‌داریم
-        _pendingSearchText = coordsText;
-      });
-
-      _mapController.move(point, 16);
-      _showSnackBar("مختصات انتخاب شد: $coordsText", success: true);
-
-      // منو رو دوباره باز کن — و داخلش مختصات میاد
-      Future.delayed(const Duration(milliseconds: 300), () {
-        _openSearchFromFab();
-      });
-    } else {
-      setState(() {
-        _selectedDestination = point;
-        _destinationMarker = Marker(
-          point: point,
-          width: 50,
-          height: 50,
-          child: const Icon(Icons.location_on, color: Colors.red, size: 50),
-        );
-      });
-    }
+  Future<void> _reverseGeocode(LatLng point, {required bool isDestination}) async {
+    final url = Uri.parse('https://nominatim.openstreetmap.org/reverse?format=json&lat=${point.latitude}&lon=${point.longitude}&zoom=18&accept-language=fa');
+    try {
+      final res = await http.get(url);
+      if (res.statusCode == 200) {
+        final data = json.decode(res.body);
+        String name = data['display_name']?.split(',')[0] ?? "مکان انتخاب‌شده";
+        setState(() {
+          if (isDestination) {
+            _destinationController.text = name.length > 35 ? "${name.substring(0, 35)}..." : name;
+          } else {
+            _originController.text = name.length > 35 ? "${name.substring(0, 35)}..." : name;
+            _originLatLng = point;
+          }
+        });
+      }
+    } catch (_) {}
   }
 
   void _swapOriginAndDestination() {
@@ -281,15 +249,6 @@ class _NavigationMapScreenState extends State<NavigationMapScreen>
 
   void _openSearchFromFab() {
     _searchController.clear();
-
-    // اگر مختصات منتظر بود، بعد از باز شدن منو بذار توی فیلد
-    if (_pendingSearchText != null) {
-      Future.delayed(const Duration(milliseconds: 100), () {
-        _searchController.text = _pendingSearchText!;
-        _pendingSearchText = null; // پاک کن که دوباره نیاد
-      });
-    }
-
     Future.delayed(const Duration(milliseconds: 100), () {
       showGeneralDialog(
         context: context,
@@ -305,60 +264,8 @@ class _NavigationMapScreenState extends State<NavigationMapScreen>
             child: child,
           );
         },
-      ).then((_) {
-        _searchController.clear();
-        _pendingSearchText = null; // در صورت بسته شدن دستی
-      });
+      ).then((_) => _searchController.clear());
     });
-  }
-  // تابع جدید: فعال کردن حالت انتخاب از نقشه
-  void _enableMapSelectionMode() {
-    setState(() => _isSelectingFromMap = true);
-    Navigator.of(context).pop(); // بستن منوی جستجو
-    _showSnackBar("روی نقشه ضربه بزنید تا مقصد انتخاب شود", success: true);
-  }
-
-  // تابع جدید: باز کردن منوی مسیریابی (برای استفاده بعد از انتخاب از نقشه)
-  void _openRoutingPanel() {
-    showGeneralDialog(
-      context: context,
-      barrierDismissible: true,
-      barrierLabel: "routing_panel",
-      barrierColor: Colors.black.withOpacity(0.5),
-      transitionDuration: const Duration(milliseconds: 320),
-      pageBuilder: (_, __, ___) => RoutingTopPanel(
-        originController: _originController,
-        destinationController: _destinationController,
-        selectedDestination: _selectedDestination,
-        originLatLng: _originLatLng,
-        isLoadingRoute: _isLoadingRoute,
-        modeNotifier: _modeNotifier,
-        onModeChanged: (mode) {
-          _selectedMode = mode;
-          _modeNotifier.value = mode;
-        },
-        onSwap: _swapOriginAndDestination,
-        onClearDestination: () => setState(() {
-          _selectedDestination = null;
-          _destinationMarker = null;
-          _destinationController.clear();
-        }),
-        onClearOrigin: () => setState(() {
-          _originLatLng = null;
-          _originController.text = "موقعیت فعلی";
-        }),
-        onStartRouting: _startRouting,
-        modeName: _getModeName(),
-        onClose: () => Navigator.of(context).pop(),
-      ),
-      transitionBuilder: (_, animation, __, child) {
-        return SlideTransition(
-          position: Tween<Offset>(begin: const Offset(0, -1), end: Offset.zero)
-              .animate(CurvedAnimation(parent: animation, curve: Curves.easeOutCubic)),
-          child: child,
-        );
-      },
-    );
   }
 
   @override
@@ -453,7 +360,7 @@ class _NavigationMapScreenState extends State<NavigationMapScreen>
               width: 50, height: 50,
               child: const Icon(Icons.location_searching, color: Colors.purple, size: 50),
             );
-            _selectedDestination = point;
+            _selectedDestination = point; // مهم: مقصد انتخاب شد
             _destinationController.text = name.length > 35 ? "${name.substring(0, 35)}..." : name;
             _destinationMarker = Marker(
               point: point,
@@ -478,7 +385,7 @@ class _NavigationMapScreenState extends State<NavigationMapScreen>
   }
 }
 
-// منوی جستجو از بالا — فقط با اضافه شدن دکمه انتخاب از نقشه
+// منوی جستجو از بالا — بروز شده با دکمه مسیریابی هوشمند
 class _SearchTopSheet extends StatelessWidget {
   final _NavigationMapScreenState state;
   const _SearchTopSheet({required this.state});
@@ -509,7 +416,6 @@ class _SearchTopSheet extends StatelessWidget {
                   const Text("جستجو و مسیریابی", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 20),
 
-                  // فقط این قسمت تغییر کرد: اضافه شدن دکمه نقشه
                   TextField(
                     controller: state._searchController,
                     autofocus: true,
@@ -517,24 +423,9 @@ class _SearchTopSheet extends StatelessWidget {
                     decoration: InputDecoration(
                       hintText: "نام مکان، آدرس یا نقطه معروف...",
                       prefixIcon: const Icon(Icons.search),
-                      suffixIcon: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          // دکمه انتخاب از روی نقشه
-                          IconButton(
-                            icon: const Icon(Icons.location_on_outlined, color: Colors.red),
-                            tooltip: "انتخاب از روی نقشه",
-                            onPressed: state._enableMapSelectionMode,
-                          ),
-                          // لودینگ یا پاک کردن
-                          state._isSearchingPoint
-                              ? const Padding(padding: EdgeInsets.all(8), child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)))
-                              : IconButton(
-                                  icon: const Icon(Icons.clear),
-                                  onPressed: () => state._searchController.clear(),
-                                ),
-                        ],
-                      ),
+                      suffixIcon: state._isSearchingPoint
+                          ? const Padding(padding: EdgeInsets.all(8), child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)))
+                          : IconButton(icon: const Icon(Icons.clear), onPressed: () => state._searchController.clear()),
                       filled: true,
                       fillColor: Colors.grey[100],
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(18), borderSide: BorderSide.none),
@@ -563,13 +454,46 @@ class _SearchTopSheet extends StatelessWidget {
 
                             if (state._selectedDestination != null) {
                               state._destinationController.text = query;
-                              state._modeNotifier.value = state._selectedMode;
-                              Navigator.of(context).pop();
+                              Navigator.of(context).pop(); // بستن جستجو
 
-                              state._openRoutingPanel();
+                              showGeneralDialog(
+                                context: context,
+                                barrierDismissible: true,
+                                barrierLabel: "routing_panel",
+                                barrierColor: Colors.black.withOpacity(0.5),
+                                transitionDuration: const Duration(milliseconds: 320),
+                                pageBuilder: (_, __, ___) => RoutingTopPanel(
+                                  originController: state._originController,
+                                  destinationController: state._destinationController,
+                                  selectedDestination: state._selectedDestination,
+                                  originLatLng: state._originLatLng,
+                                  isLoadingRoute: state._isLoadingRoute,
+                                  selectedMode: state._selectedMode,
+                                  onModeChanged: (mode) => state.setState(() => state._selectedMode = mode),
+                                  onSwap: state._swapOriginAndDestination,
+                                  onClearDestination: () => state.setState(() {
+                                    state._selectedDestination = null;
+                                    state._destinationMarker = null;
+                                    state._destinationController.clear();
+                                  }),
+                                  onClearOrigin: () => state.setState(() {
+                                    state._originLatLng = null;
+                                    state._originController.text = "موقعیت فعلی";
+                                  }),
+                                  onStartRouting: state._startRouting,
+                                  modeName: state._getModeName(),
+                                  onClose: () => Navigator.of(context).pop(),
+                                ),
+                                transitionBuilder: (_, animation, __, child) {
+                                  return SlideTransition(
+                                    position: Tween<Offset>(begin: const Offset(0, -1), end: Offset.zero)
+                                        .animate(CurvedAnimation(parent: animation, curve: Curves.easeOutCubic)),
+                                    child: child,
+                                  );
+                                },
+                              );
                             }
-                          },
-                        ),
+                          },                        ),
                       ),
                       const SizedBox(width: 12),
                       Expanded(

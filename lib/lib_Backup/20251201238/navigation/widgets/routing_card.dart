@@ -4,13 +4,13 @@ import 'package:latlong2/latlong.dart';
 import 'transport_mode_selector.dart';
 import 'search_field.dart';
 
-class RoutingTopPanel extends StatelessWidget {
+class RoutingTopPanel extends StatefulWidget {
   final TextEditingController originController;
   final TextEditingController destinationController;
   final LatLng? selectedDestination;
   final LatLng? originLatLng;
   final bool isLoadingRoute;
-  final ValueNotifier<String> modeNotifier; // این جدیده
+  final String selectedMode;
   final Function(String) onModeChanged;
   final VoidCallback onSwap;
   final VoidCallback onClearDestination;
@@ -26,7 +26,7 @@ class RoutingTopPanel extends StatelessWidget {
     required this.selectedDestination,
     required this.originLatLng,
     required this.isLoadingRoute,
-    required this.modeNotifier,
+    required this.selectedMode,
     required this.onModeChanged,
     required this.onSwap,
     required this.onClearDestination,
@@ -35,6 +35,32 @@ class RoutingTopPanel extends StatelessWidget {
     required this.modeName,
     required this.onClose,
   }) : super(key: key);
+
+  @override
+  State<RoutingTopPanel> createState() => _RoutingTopPanelState();
+}
+
+class _RoutingTopPanelState extends State<RoutingTopPanel> {
+  late String _currentMode;
+
+  @override
+  void initState() {
+    super.initState();
+    _currentMode = widget.selectedMode;
+  }
+
+  @override
+  void didUpdateWidget(RoutingTopPanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.selectedMode != widget.selectedMode) {
+      _currentMode = widget.selectedMode;
+    }
+  }
+
+  void _updateMode(String mode) {
+    setState(() => _currentMode = mode);
+    widget.onModeChanged(mode); // آپدیت state اصلی
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -61,7 +87,7 @@ class RoutingTopPanel extends StatelessWidget {
                     children: [
                       Container(width: 50, height: 5, decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(10))),
                       const Spacer(),
-                      IconButton(onPressed: onClose, icon: const Icon(Icons.close, color: Colors.grey)),
+                      IconButton(onPressed: widget.onClose, icon: const Icon(Icons.close, color: Colors.grey)),
                     ],
                   ),
                   const SizedBox(height: 16),
@@ -69,10 +95,10 @@ class RoutingTopPanel extends StatelessWidget {
                   const SizedBox(height: 20),
 
                   SearchField(
-                    controller: originController,
+                    controller: widget.originController,
                     hintText: "مبدا",
                     isLoading: false,
-                    onClear: originLatLng != null ? onClearOrigin : null,
+                    onClear: widget.originLatLng != null ? widget.onClearOrigin : null,
                     fillColor: Colors.grey[100]!,
                     prefixIcon: Icons.my_location,
                     prefixIconColor: Colors.blue,
@@ -81,10 +107,10 @@ class RoutingTopPanel extends StatelessWidget {
                   const SizedBox(height: 12),
 
                   SearchField(
-                    controller: destinationController,
+                    controller: widget.destinationController,
                     hintText: "مقصد",
                     isLoading: false,
-                    onClear: selectedDestination != null ? onClearDestination : null,
+                    onClear: widget.selectedDestination != null ? widget.onClearDestination : null,
                     fillColor: Colors.grey[100]!,
                     prefixIcon: Icons.location_on,
                     prefixIconColor: Colors.red,
@@ -94,35 +120,27 @@ class RoutingTopPanel extends StatelessWidget {
 
                   Center(
                     child: IconButton(
-                      onPressed: selectedDestination != null ? onSwap : null,
-                      icon: Icon(Icons.swap_vert, size: 36, color: selectedDestination != null ? Colors.blue : Colors.grey),
+                      onPressed: widget.selectedDestination != null ? widget.onSwap : null,
+                      icon: Icon(Icons.swap_vert, size: 36, color: widget.selectedDestination != null ? Colors.blue : Colors.grey),
                     ),
                   ),
                   const SizedBox(height: 20),
 
-                  // این قسمت مهمه: با ValueListenableBuilder رنگ فوراً آپدیت میشه
-                  ValueListenableBuilder<String>(
-                    valueListenable: modeNotifier,
-                    builder: (context, mode, _) {
-                      return TransportModeSelector(
-                        selectedMode: mode,
-                        onModeSelected: (newMode) {
-                          modeNotifier.value = newMode; // آپدیت فوری
-                          onModeChanged(newMode);        // آپدیت state اصلی
-                        },
-                      );
-                    },
+                  // اینجا از _currentMode استفاده می‌کنیم → همیشه آپدیت میشه
+                  TransportModeSelector(
+                    selectedMode: _currentMode,
+                    onModeSelected: _updateMode,
                   ),
                   const SizedBox(height: 24),
 
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton.icon(
-                      onPressed: selectedDestination == null || isLoadingRoute ? null : onStartRouting,
-                      icon: isLoadingRoute
+                      onPressed: widget.selectedDestination == null || widget.isLoadingRoute ? null : widget.onStartRouting,
+                      icon: widget.isLoadingRoute
                           ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
                           : const Icon(Icons.directions),
-                      label: Text(isLoadingRoute ? "در حال رسم مسیر..." : "شروع مسیریابی با $modeName"),
+                      label: Text(widget.isLoadingRoute ? "در حال رسم مسیر..." : "شروع مسیریابی با ${widget.modeName}"),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.blue,
                         padding: const EdgeInsets.symmetric(vertical: 16),
