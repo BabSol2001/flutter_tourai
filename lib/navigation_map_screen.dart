@@ -5,9 +5,15 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'dart:math' as math;
 import 'package:geolocator/geolocator.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import 'package:share_plus/share_plus.dart';
+
+
 
 // ویجت منوی مسیریابی از بالا (با ValueNotifier)
 import 'navigation/widgets/routing_card.dart';
+import 'navigation/widgets/share.dart';
+import 'navigation/widgets/advanced_search.dart';
 
 class NavigationMapScreen extends StatefulWidget {
   final bool isDarkMode;
@@ -478,6 +484,37 @@ class _NavigationMapScreenState extends State<NavigationMapScreen>
   }
 }
 
+class _IconActionButton extends StatelessWidget {
+  final IconData icon;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _IconActionButton({
+    required this.icon,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.12),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: color.withOpacity(0.3), width: 1),
+          ),
+          child: Icon(icon, color: color, size: 28),
+        ),
+      ),
+    );
+  }
+}
 // منوی جستجو از بالا — فقط با اضافه شدن دکمه انتخاب از نقشه
 class _SearchTopSheet extends StatelessWidget {
   final _NavigationMapScreenState state;
@@ -549,44 +586,103 @@ class _SearchTopSheet extends StatelessWidget {
                   const SizedBox(height: 20),
 
                   Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                     children: [
-                      Expanded(
-                        child: ElevatedButton.icon(
-                          icon: const Icon(Icons.directions, color: Colors.white),
-                          label: const Text("مسیریابی"),
-                          style: ElevatedButton.styleFrom(backgroundColor: Colors.blue, padding: const EdgeInsets.symmetric(vertical: 15)),
-                          onPressed: () async {
-                            final query = state._searchController.text.trim();
-                            if (query.isEmpty) return;
 
-                            await state._searchPoint(query);
+                      // دکمه مسیریابی
+                      _IconActionButton(
+                        icon: Icons.directions,
+                        color: Colors.blue.shade600,
+                        onTap: () async {
+                          final query = state._searchController.text.trim();
+                          if (query.isEmpty) return;
 
-                            if (state._selectedDestination != null) {
-                              state._destinationController.text = query;
-                              state._modeNotifier.value = state._selectedMode;
-                              Navigator.of(context).pop();
+                          await state._searchPoint(query);
+                          if (state._selectedDestination != null) {
+                            state._destinationController.text = query;
+                            state._modeNotifier.value = state._selectedMode;
+                            Navigator.of(context).pop();
+                            state._openRoutingPanel();
+                          }
+                        },
+                      ),
 
-                              state._openRoutingPanel();
-                            }
+                      // دکمه جستجو
+                      _IconActionButton(
+                        icon: Icons.search_rounded,
+                        color: Colors.green.shade600,
+                        onTap: () {
+                          if (state._searchController.text.trim().isNotEmpty) {
+                            state._searchPoint(state._searchController.text);
+                            Navigator.of(context).pop();
+                          }
+                        },
+                      ),
+
+                      // دکمه اشتراک‌گذاری (فقط وقتی مقصد انتخاب شده)
+                      // دکمه اشتراک‌گذاری (فقط وقتی مقصد انتخاب شده)
+                      if (state._selectedDestination != null)
+                        _IconActionButton(
+                          icon: Icons.share,
+                          color: Colors.purple.shade600,
+                          onTap: () {
+                            showModalBottomSheet(
+                              context: context,
+                              backgroundColor: Colors.white,
+                              shape: const RoundedRectangleBorder(
+                                borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+                              ),
+                              builder: (context) => Padding(
+                                padding: const EdgeInsets.all(20),
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Text(
+                                      "اشتراک‌گذاری مکان",
+                                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                                    ),
+                                    const SizedBox(height: 20),
+                                    ShareLocationButton(
+                                      location: state._selectedDestination!,
+                                      placeName: state._searchController.text.trim().isNotEmpty
+                                          ? state._searchController.text.trim()
+                                          : null,
+                                      message: "اینجا را پیدا کردم!",
+                                    ),
+                                    const SizedBox(height: 20),
+                                  ],
+                                ),
+                              ),
+                            );
                           },
                         ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: ElevatedButton.icon(
-                          icon: const Icon(Icons.location_on, color: Colors.white),
-                          label: const Text("جستجو"),
-                          style: ElevatedButton.styleFrom(backgroundColor: Colors.green, padding: const EdgeInsets.symmetric(vertical: 15)),
-                          onPressed: () {
-                            if (state._searchController.text.trim().isNotEmpty) {
-                              state._searchPoint(state._searchController.text);
-                              Navigator.of(context).pop();
-                            }
+
+                      // دکمه جستجوی پیشرفته (اطراف من)
+                      if (state._selectedDestination != null)
+                        _IconActionButton(
+                          icon: Icons.radar,
+                          color: Colors.teal.shade600,
+                          onTap: () {
+                            Navigator.of(context).pop();
+                            showModalBottomSheet(
+                              context: context,
+                              isScrollControlled: true,
+                              backgroundColor: Colors.transparent,
+                              builder: (_) => DraggableScrollableSheet(
+                                initialChildSize: 0.6,
+                                maxChildSize: 0.95,
+                                minChildSize: 0.4,
+                                builder: (_, __) => AdvancedSearchSheet(
+                                  centerLocation: state._selectedDestination!,
+                                  onClose: () => Navigator.pop(context),
+                                ),
+                              ),
+                            );
                           },
                         ),
-                      ),
-                    ],
+                      ],
                   ),
+
                   const SizedBox(height: 10),
                 ],
               ),
