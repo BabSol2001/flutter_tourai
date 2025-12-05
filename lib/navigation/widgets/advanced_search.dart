@@ -7,6 +7,8 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:latlong2/latlong.dart' show Distance;
 
+const String baseUrl = "http://192.168.0.105:8000"; // عوضش کن!
+
 class _AdvancedIconButton extends StatelessWidget {
   final IconData icon;
   final Color color;
@@ -81,6 +83,7 @@ class AdvancedSearchSheet extends StatefulWidget {
 
 class _AdvancedSearchSheetState extends State<AdvancedSearchSheet> {
   bool _isLoading = false;
+  bool _sortByDistance = true; // پیش‌فرض: مرتب‌شده
   List<Map<String, dynamic>> _results = [];
   final Distance distance = const Distance();
 
@@ -99,6 +102,7 @@ class _AdvancedSearchSheetState extends State<AdvancedSearchSheet> {
           controller: controller,
           physics: const BouncingScrollPhysics(),
           slivers: [
+            // هندل + عنوان
             SliverToBoxAdapter(
               child: Column(
                 children: [
@@ -122,6 +126,7 @@ class _AdvancedSearchSheetState extends State<AdvancedSearchSheet> {
               ),
             ),
 
+            // گرید آیکون‌ها
             SliverPadding(
               padding: const EdgeInsets.symmetric(horizontal: 20),
               sliver: SliverGrid(
@@ -140,10 +145,10 @@ class _AdvancedSearchSheetState extends State<AdvancedSearchSheet> {
                   _AdvancedIconButton(icon: Icons.ev_station,            color: Colors.cyan.shade700,    tooltip: "ایستگاه شارژ برقی",      onTap: () => _search('amenity=charging_station', "شارژ برقی")),
                   _AdvancedIconButton(icon: Icons.electric_bike,         color: Colors.lime.shade700,    tooltip: "کرایه دوچرخه",          onTap: () => _search('amenity=bicycle_rental', "کرایه دوچرخه")),
                   _AdvancedIconButton(icon: Icons.local_hospital,        color: Colors.red.shade800,     tooltip: "بیمارستان",              onTap: () => _search('amenity=hospital', "بیمارستان")),
-                  _AdvancedIconButton(icon: Icons.directions_bus,        color: Colors.purple.shade700,  tooltip: "ایستگاه اتوبوس",         onTap: () => _search('highway=bus_stop OR amenity=bus_station', "اتوبوس")),
+                  _AdvancedIconButton(icon: Icons.directions_bus,        color: Colors.purple.shade700,  tooltip: "ایستگاه اتوبوس",         onTap: () => _searchBusStops()),
 
                   _AdvancedIconButton(icon: Icons.train,                 color: Colors.deepPurple.shade700, tooltip: "ایستگاه مترو",          onTap: () => _search('railway=station AND (station=subway OR railway=subway)', "مترو")),
-                  _AdvancedIconButton(icon: Icons.store_mall_directory,  color: Colors.blue.shade700,    tooltip: "سوپرمارکت",             onTap: () => _search('shop=supermarket|shop=convenience', "سوپرمارکت")),
+                  _AdvancedIconButton(icon: Icons.store_mall_directory,  color: Colors.blue.shade700,    tooltip: " محلیسوپرمارکت",             onTap: () => _search('shop=supermarket|shop=convenience', "سوپرمارکت")),
                   _AdvancedIconButton(icon: Icons.park,                  color: Colors.green.shade700,   tooltip: "پارک",                   onTap: () => _search('leisure=park', "پارک")),
                   _AdvancedIconButton(icon: Icons.mosque,                color: Colors.teal.shade800,    tooltip: "مسجد",                   onTap: () => _search('amenity=place_of_worship\nreligion=muslim', "مسجد")),
 
@@ -161,10 +166,19 @@ class _AdvancedSearchSheetState extends State<AdvancedSearchSheet> {
                       "پارکینگ رایگان کنار خیابان",
                     ),
                   ),
+
+                  // فروشگاه زنجیره‌ای بزرگ
+                  _AdvancedIconButton(
+                    icon: Icons.storefront_outlined,
+                    color: const Color(0xFFE64A19),
+                    tooltip: "فروشگاه زنجیره‌ای بزرگ (جهانی)",
+                    onTap: _searchChainStoresFromBackend,
+                  ),
                 ]),
               ),
             ),
 
+            // لودینگ
             if (_isLoading)
               const SliverToBoxAdapter(
                 child: Padding(
@@ -173,6 +187,7 @@ class _AdvancedSearchSheetState extends State<AdvancedSearchSheet> {
                 ),
               ),
 
+            // نتایج + دکمه مرتب‌سازی
             if (_results.isNotEmpty)
               SliverToBoxAdapter(
                 child: Container(
@@ -186,18 +201,52 @@ class _AdvancedSearchSheetState extends State<AdvancedSearchSheet> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text("${_results.length} نتیجه پیدا شد", style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
-                      const SizedBox(height: 14),
-                      ..._results.take(8).map((place) {
+                      // دکمه مرتب‌سازی + تعداد نتایج
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            "${_results.length} نتیجه پیدا شد",
+                            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                          ),
+                          TextButton.icon(
+                            onPressed: () {
+                              setState(() {
+                                _sortByDistance = !_sortByDistance;
+                                _sortResultsByDistance();
+                              });
+                            },
+                            icon: Icon(
+                              _sortByDistance ? Icons.location_on : Icons.location_off,
+                              size: 15,
+                              color: _sortByDistance ? Colors.red.shade600 : Colors.grey,
+                            ),
+                            label: Text(
+                              _sortByDistance ? " بر اساس فاصله" : "ترتیب اولیه",
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: _sortByDistance ? Colors.red.shade600 : Colors.grey[700],
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+
+                      // لیست نتایج
+                      ..._results.map((place) {
                         final name = place['tags']?['name:fa'] ?? place['tags']?['name'] ?? "بدون نام";
                         final lat = place['lat'] ?? place['center']?['lat'];
                         final lon = place['lon'] ?? place['center']?['lon'];
-                        final dist = distance(widget.centerLocation, LatLng(lat, lon));
+                        final dist = lat != null && lon != null
+                            ? distance(widget.centerLocation, LatLng(lat, lon)).toInt()
+                            : 0;
                         return ListTile(
                           dense: true,
                           contentPadding: EdgeInsets.zero,
                           title: Text(name, style: const TextStyle(fontSize: 15)),
-                          subtitle: Text("${dist.toStringAsFixed(0)} متر"),
+                          subtitle: Text("$dist متر"),
                           trailing: const Icon(Icons.arrow_forward_ios, size: 16),
                           onTap: widget.onClose,
                         );
@@ -215,6 +264,27 @@ class _AdvancedSearchSheetState extends State<AdvancedSearchSheet> {
   }
 
   void _search(String query, String title) => _searchCategory(query, title);
+
+  // همه جستجوها بعد از پر کردن نتایج، این خط رو صدا می‌زنن
+  void _sortResultsByDistance() {
+    if (!_sortByDistance) return;
+
+    final userPos = widget.centerLocation;
+
+    _results.sort((a, b) {
+      double latA = a['lat'] ?? a['center']?['lat'] ?? 0.0;
+      double lonA = a['lon'] ?? a['center']?['lon'] ?? 0.0;
+      double latB = b['lat'] ?? b['center']?['lat'] ?? 0.0;
+      double lonB = b['lon'] ?? b['center']?['lon'] ?? 0.0;
+
+      double distA = distance(userPos, LatLng(latA, lonA));
+      double distB = distance(userPos, LatLng(latB, lonB));
+
+      return distA.compareTo(distB);
+    });
+
+    setState(() {});
+  }
 
   Future<void> _searchCategory(String query, String title) async {
     setState(() {
@@ -242,6 +312,7 @@ class _AdvancedSearchSheetState extends State<AdvancedSearchSheet> {
         final data = json.decode(res.body);
         setState(() {
           _results = List<Map<String, dynamic>>.from(data['elements']);
+          _sortResultsByDistance(); // مرتب کن
         });
       }
     } catch (e) {
@@ -249,5 +320,122 @@ class _AdvancedSearchSheetState extends State<AdvancedSearchSheet> {
     } finally {
       setState(() => _isLoading = false);
     }
+  }
+
+  Future<void> _searchBusStops() async {
+    setState(() {
+      _isLoading = true;
+      _results.clear();
+    });
+
+    final lat = widget.centerLocation.latitude;
+    final lon = widget.centerLocation.longitude;
+
+    final overpassQuery = """
+    [out:json][timeout:40];
+    (
+      node["highway"="bus_stop"](around:5000,$lat,$lon);
+      node["amenity"="bus_station"](around:5000,$lat,$lon);
+      node["public_transport"="platform"]["bus"="yes"](around:5000,$lat,$lon);
+      node["highway"="bus_stop"]["shelter"="yes"](around:5000,$lat,$lon);
+    );
+    out center tags;
+    """;
+
+    try {
+      final uri = Uri.parse("https://overpass-api.de/api/interpreter?data=${Uri.encodeComponent(overpassQuery)}");
+      final res = await http.get(uri);
+      if (res.statusCode == 200) {
+        final data = json.decode(res.body);
+        setState(() {
+          _results = List<Map<String, dynamic>>.from(data['elements']);
+          _sortResultsByDistance(); // مرتب کن
+        });
+      }
+    } catch (e) {
+      // ساکت
+    } finally {
+      setState(() => _isLoading = false);
+    }
+  }
+
+  // تابع مخصوص سوپرمارکت معمولی — بدون مشکل پارسینگ
+  Future<void> _searchSupermarket() async {
+    setState(() {
+      _isLoading = true;
+      _results.clear();
+    });
+
+    final lat = widget.centerLocation.latitude;
+    final lon = widget.centerLocation.longitude;
+
+    final overpassQuery = """
+    [out:json][timeout:40];
+    (
+      node["shop"="supermarket"](around:5000,$lat,$lon);
+      node["shop"="convenience"](around:5000,$lat,$lon);
+      way["shop"="supermarket"](around:5000,$lat,$lon);
+      way["shop"="convenience"](around:5000,$lat,$lon);
+    );
+    out center tags;
+    """;
+
+    try {
+      final uri = Uri.parse("https://overpass-api.de/api/interpreter?data=${Uri.encodeComponent(overpassQuery)}");
+      final res = await http.get(uri);
+      if (res.statusCode == 200) {
+        final data = json.decode(res.body);
+        setState(() {
+          _results = List<Map<String, dynamic>>.from(data['elements']);
+          _sortResultsByDistance(); // مرتب هم میشه
+        });
+      }
+    } catch (e) {
+      print("خطا در سوپرمارکت: $e");
+    } finally {
+      setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _searchChainStoresFromBackend() async {
+    setState(() {
+      _isLoading = true;
+      _results.clear();
+      _sortResultsByDistance();
+    });
+
+    final lat = widget.centerLocation.latitude;
+    final lon = widget.centerLocation.longitude;
+    final url = '$baseUrl/api/v1/osm/search/chain-stores/?lat=$lat&lon=$lon&radius=5000';
+
+    try {
+      final response = await http.get(Uri.parse(url));
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        final List items = data['results'];
+
+        setState(() {
+          _results = items.map((e) => {
+                "tags": {"name": e["name"], "name:fa": e["name"]},
+                "lat": e["lat"],
+                "lon": e["lon"],
+              }).toList();
+          _sortResultsByDistance(); // مرتب کن
+        });
+      } else {
+        _fallbackChainSearch();
+      }
+    } catch (e) {
+      _fallbackChainSearch();
+    } finally {
+      setState(() => _isLoading = false);
+    }
+  }
+
+  void _fallbackChainSearch() {
+    _searchCategory(
+      'shop=supermarket AND (name~"رفاه|شهروند|کوروش|جانبو|هایپراستار|افق کوروش|لولو|کارفور")',
+      "فروشگاه زنجیره‌ای (آفلاین)",
+    );
   }
 }
