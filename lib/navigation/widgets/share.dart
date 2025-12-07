@@ -27,7 +27,11 @@ class ShareLocationButton extends StatelessWidget {
     return SizedBox(
       height: height ?? 48,
       child: ElevatedButton.icon(
-        onPressed: () => _shareLocation(),
+        onPressed: () => ShareLocationButton.shareLocationStatic(
+          location: location,
+          placeName: placeName,
+          message: message,
+        ),
         icon: const Icon(Icons.share, size: 18),
         label: const Text("اشتراک"),
         style: ElevatedButton.styleFrom(
@@ -40,7 +44,11 @@ class ShareLocationButton extends StatelessWidget {
     );
   }
 
-  Future<void> _shareLocation() async {
+  static Future<void> shareLocationStatic({
+    required LatLng location,
+    String? placeName,
+    String message = "من الان اینجام",
+  }) async {
     final lat = location.latitude.toStringAsFixed(6);
     final lng = location.longitude.toStringAsFixed(6);
     final coords = "$lat, $lng";

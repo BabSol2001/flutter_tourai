@@ -656,7 +656,7 @@ class _SearchTopSheet extends StatelessWidget {
                                 if (state._currentPosition != null) {
                                   final pos = state._currentPosition!;
                                   final coords = "${pos.latitude.toStringAsFixed(6)}, ${pos.longitude.toStringAsFixed(6)}";
-                                  if (context.mounted) Navigator.of(context).pop();
+                                  //if (context.mounted) Navigator.of(context).pop();
                                   Future.delayed(const Duration(milliseconds: 300), () {
                                     state._searchController.text = coords;
                                     state._pendingSearchText = coords;
@@ -780,27 +780,13 @@ class _SearchTopSheet extends StatelessWidget {
                       }),
                       if (state._selectedDestination != null)
                         _IconActionButton(icon: Icons.share, color: Colors.purple.shade600, onTap: () {
-                          showModalBottomSheet(
-                            context: context,
-                            backgroundColor: Colors.white,
-                            shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-                            builder: (context) => Padding(
-                              padding: const EdgeInsets.all(20),
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  const Text("اشتراک‌گذاری مکان", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                                  const SizedBox(height: 20),
-                                  ShareLocationButton(
-                                    location: state._selectedDestination!,
-                                    placeName: state._searchController.text.trim().isNotEmpty ? state._searchController.text.trim() : null,
-                                    message: "اینجا را پیدا کردم!",
-                                  ),
-                                  const SizedBox(height: 20),
-                                ],
-                              ),
-                            ),
-                          );
+                          ShareLocationButton.shareLocationStatic(
+                              location: state._selectedDestination!,
+                              placeName: state._searchController.text.trim().isNotEmpty
+                                  ? state._searchController.text.trim()
+                                  : null,
+                              message: "اینجا را پیدا کردم!",
+                            );
                         }),
                       if (state._selectedDestination != null)
                         _IconActionButton(
