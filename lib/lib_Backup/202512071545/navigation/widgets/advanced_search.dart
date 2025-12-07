@@ -67,14 +67,12 @@ class AdvancedSearchSheet extends StatefulWidget {
   final LatLng centerLocation;
   final VoidCallback onClose;
   final VoidCallback onBackToSearch; // جدید: برای برگشت به منوی جستجو
-  final String? autoSearchCategory;
 
   const AdvancedSearchSheet({
     Key? key,
     required this.centerLocation,
     required this.onClose,
     required this.onBackToSearch,
-    this.autoSearchCategory,
   }) : super(key: key);
 
   @override
@@ -97,83 +95,6 @@ class _AdvancedSearchSheetState extends State<AdvancedSearchSheet> {
         onTap: onTap,
       ),
     );
-  }
-
-  @override
-  void initState() {
-    super.initState();
-
-    // این خط حتماً باشه
-
-    // اگر از منوی اصلی اومده و گفته "رستوران رو جستجو کن"، خودکار انجام بده
-    if (widget.autoSearchCategory != null) {
-      Future.delayed(const Duration(milliseconds: 500), () {
-        if (widget.autoSearchCategory != null) {
-  Future.delayed(const Duration(milliseconds: 600), () {
-    switch (widget.autoSearchCategory) {
-      case "cafe":
-        _searchCategory('amenity=cafe', "کافه");
-        break;
-      case "restaurant":
-        _searchCategory('amenity=restaurant', "رستوران");
-        break;
-      case "fuel":
-        _searchCategory('amenity=fuel', "پمپ بنزین");
-        break;
-      case "pharmacy":
-        _searchCategory('amenity=pharmacy', "داروخانه");
-        break;
-      case "hospital":
-        _searchCategory('amenity=hospital', "بیمارستان");
-        break;
-      case "bus_stop":
-        _searchBusStops(); // این تابع جدا داره، پس مستقیم صدا می‌زنیم
-        break;
-      case "supermarket":
-        _searchSupermarket(); // اینم تابع جدا داره
-        break;
-      case "park":
-        _searchCategory('leisure=park', "پارک");
-        break;
-      case "bank":
-        _searchBanksAndAtms(); // این شامل بانک و خودپرداز میشه
-        break;
-      case "free_parking":
-        _searchFreeStreetParking();
-        break;
-      case "school":
-        _searchEducationalPlaces();
-        break;
-      case "charging_station":
-        _searchCategory('amenity=charging_station', "ایستگاه شارژ برقی");
-        break;
-      case "bicycle_rental":
-        _searchCategory('amenity=bicycle_rental', "کرایه دوچرخه");
-        break;
-      case "metro":
-        _searchCategory('railway=station AND (station=subway OR railway=subway)', "ایستگاه مترو");
-        break;
-      case "tourism":
-        _searchTouristAttractions();
-        break;
-      case "worship":
-        _searchPlacesOfWorship();
-        break;
-      case "chain_store":
-        _searchChainStoresFromBackend();
-        break;
-      case "parking":
-        _searchCategory('amenity=parking', "پارکینگ عمومی");
-        break;
-
-      // اگر چیزی اشتباه بود یا پیدا نشد، حداقل یه چیزی نشون بده
-      default:
-        _searchCategory('amenity=cafe', "جستجوی پیشرفته");
-    }
-  });
-}
-      });
-    }
   }
 
   @override

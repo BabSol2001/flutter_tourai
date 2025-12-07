@@ -365,7 +365,7 @@ class _NavigationMapScreenState extends State<NavigationMapScreen>
   }
 
   // تابع جدید: باز کردن AdvancedSearch با امکان برگشت
-void _openAdvancedSearch({String? autoSearch}) {
+  void _openAdvancedSearch() {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -378,14 +378,14 @@ void _openAdvancedSearch({String? autoSearch}) {
           centerLocation: _selectedDestination!,
           onClose: () => Navigator.pop(context),
           onBackToSearch: () {
-            Navigator.pop(context);
-            _openSearchFromFab();
+            Navigator.pop(context);        // بستن AdvancedSearch
+            _openSearchFromFab();          // باز کردن دوباره منوی جستجو
           },
-          autoSearchCategory: autoSearch, // این خط اضافه شد
         ),
       ),
     );
   }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -719,39 +719,17 @@ class _SearchTopSheet extends StatelessWidget {
                         physics: const BouncingScrollPhysics(),
                         padding: const EdgeInsets.symmetric(horizontal: 8),
                         children: [
-                          _buildIconButton(Icons.coffee, Colors.brown.shade700, "کافه", () {
-                            state._openAdvancedSearch(autoSearch: "cafe");
-                          }),
-                          _buildIconButton(Icons.restaurant_menu, Colors.orange.shade700, "رستوران", () {
-                            state._openAdvancedSearch(autoSearch: "restaurant");
-                          }),
-                          _buildIconButton(Icons.local_gas_station, Colors.red.shade600, "پمپ بنزین", () {
-                            state._openAdvancedSearch(autoSearch: "fuel");
-                          }),
-                          _buildIconButton(Icons.medication, Colors.teal.shade700, "داروخانه", () {
-                            state._openAdvancedSearch(autoSearch: "pharmacy");
-                          }),
-                          _buildIconButton(Icons.local_hospital, Colors.red.shade800, "بیمارستان", () {
-                            state._openAdvancedSearch(autoSearch: "hospital");
-                          }),
-                          _buildIconButton(Icons.directions_bus, Colors.purple.shade700, "ایستگاه اتوبوس", () {
-                            state._openAdvancedSearch(autoSearch: "bus_stop");
-                          }),
-                          _buildIconButton(Icons.store_mall_directory, Colors.blue.shade700, "سوپرمارکت", () {
-                            state._openAdvancedSearch(autoSearch: "supermarket");
-                          }),
-                          _buildIconButton(Icons.park, Colors.green.shade700, "پارک", () {
-                            state._openAdvancedSearch(autoSearch: "park");
-                          }),
-                          _buildIconButton(Icons.account_balance_outlined, Colors.indigo.shade700, "بانک", () {
-                            state._openAdvancedSearch(autoSearch: "bank");
-                          }),
-                          _buildIconButton(FontAwesomeIcons.squareParking, Colors.green.shade800, "پارکینگ رایگان", () {
-                            state._openAdvancedSearch(autoSearch: "free_parking");
-                          }),
-                          _buildIconButton(Icons.school, Colors.orange.shade800, "مدرسه و دانشگاه", () {
-                            state._openAdvancedSearch(autoSearch: "school");
-                          }),
+                          _buildIconButton(Icons.coffee, Colors.brown.shade700, "کافه", () => state._openAdvancedSearch()),
+                          _buildIconButton(Icons.restaurant_menu, Colors.orange.shade700, "رستوران", () => state._openAdvancedSearch()),
+                          _buildIconButton(Icons.local_gas_station, Colors.red.shade600, "پمپ بنزین", () => state._openAdvancedSearch()),
+                          _buildIconButton(Icons.medication, Colors.teal.shade700, "داروخانه", () => state._openAdvancedSearch()),
+                          _buildIconButton(Icons.local_hospital, Colors.red.shade800, "بیمارستان", () => state._openAdvancedSearch()),
+                          _buildIconButton(Icons.directions_bus, Colors.purple.shade700, "ایستگاه اتوبوس", () => state._openAdvancedSearch()),
+                          _buildIconButton(Icons.store_mall_directory, Colors.blue.shade700, "سوپرمارکت", () => state._openAdvancedSearch()),
+                          _buildIconButton(Icons.park, Colors.green.shade700, "پارک", () => state._openAdvancedSearch()),
+                          _buildIconButton(Icons.account_balance_outlined, Colors.indigo.shade700, "بانک", () => state._openAdvancedSearch()),
+                          _buildIconButton(FontAwesomeIcons.squareParking, Colors.green.shade800, "پارکینگ رایگان", () => state._openAdvancedSearch()),
+                          _buildIconButton(Icons.school, Colors.orange.shade800, "مدرسه و دانشگاه", () => state._openAdvancedSearch()),
                         ],
                       ),
                     ),
