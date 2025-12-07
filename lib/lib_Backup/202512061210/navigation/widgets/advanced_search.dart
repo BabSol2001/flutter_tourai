@@ -112,58 +112,29 @@ class _AdvancedSearchSheetState extends State<AdvancedSearchSheet> {
           physics: const BouncingScrollPhysics(),
           slivers: [
             // هندل + عنوان
-          SliverToBoxAdapter(
-            child: Column(
-              children: [
-                // هندل بالا
-                Container(
-                  margin: const EdgeInsets.only(top: 16),
-                  width: 60,
-                  height: 7,
-                  decoration: BoxDecoration(
-                    color: Colors.grey[400],
-                    borderRadius: BorderRadius.circular(12),
+            SliverToBoxAdapter(
+              child: Column(
+                children: [
+                  Container(
+                    margin: const EdgeInsets.only(top: 16),
+                    width: 60,
+                    height: 7,
+                    decoration: BoxDecoration(
+                      color: Colors.grey[400],
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                   ),
-                ),
-
-                const SizedBox(height: 16),
-
-                // ردیف عنوان + دکمه برگشت
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Row(
-                    children: [
-                      // دکمه فلش برگشت
-                      IconButton(
-                        icon: const Icon(Icons.arrow_back_ios_new, color: Colors.black87, size: 24),
-                        onPressed: () {
-                          Navigator.of(context).pop(); // بستن AdvancedSearchSheet
-                          // دوباره باز کردن منوی اصلی جستجو
-                          Future.delayed(const Duration(milliseconds: 200), () {
-                            // این خط رو باید از NavigationMapScreen صدا بزنی
-                            // پس یه callback از بیرون بده
-                            widget.onClose(); // اول این می‌بنده
-                            // بعد از یه لحظه منوی اصلی رو باز کن
-                            // این قسمت رو باید از بیرون صدا بزنی — ادامه رو ببین
-                          });
-                        },
-                      ),
-                      const Expanded(
-                        child: Text(
-                          "جستجو در اطراف من",
-                          textAlign: TextAlign.center,
-                          style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-                        ),
-                      ),
-                      const SizedBox(width: 48), // فضای خالی سمت چپ برای تعادل
-                    ],
+                  const Padding(
+                    padding: EdgeInsets.fromLTRB(20, 24, 20, 16),
+                    child: Text(
+                      "جستجو در اطراف من",
+                      style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold),
+                    ),
                   ),
-                ),
-
-                const SizedBox(height: 10),
-              ],
+                ],
+              ),
             ),
-          ),
+
             // آیکون‌های افقی اسکرول‌شو (تمیز و حرفه‌ای)
             SliverToBoxAdapter(
               child: SizedBox(
