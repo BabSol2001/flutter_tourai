@@ -41,7 +41,7 @@ class _AdvancedIconButton extends StatelessWidget {
           borderRadius: BorderRadius.circular(32),
           onTap: onTap,
           child: Container(
-            width: 70,        // کمی کوچیک‌تر و شیک‌تر
+            width: 70,
             height: 70,
             decoration: BoxDecoration(
               color: color.withOpacity(0.18),
@@ -55,7 +55,7 @@ class _AdvancedIconButton extends StatelessWidget {
                 ),
               ],
             ),
-            child: Icon(icon, color: color, size: 36), // اندازه آیکون عالی
+            child: Icon(icon, color: color, size: 36),
           ),
         ),
       ),
@@ -66,11 +66,13 @@ class _AdvancedIconButton extends StatelessWidget {
 class AdvancedSearchSheet extends StatefulWidget {
   final LatLng centerLocation;
   final VoidCallback onClose;
+  final VoidCallback onBackToSearch; // جدید: برای برگشت به منوی جستجو
 
   const AdvancedSearchSheet({
     Key? key,
     required this.centerLocation,
     required this.onClose,
+    required this.onBackToSearch,
   }) : super(key: key);
 
   @override
@@ -83,10 +85,9 @@ class _AdvancedSearchSheetState extends State<AdvancedSearchSheet> {
   List<Map<String, dynamic>> _results = [];
   final Distance distance = const Distance();
 
-  // متد کمکی برای ساخت دکمه با فاصله مناسب
   Widget _buildIconButton(IconData icon, Color color, String tooltip, VoidCallback onTap) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 10.0), // فاصله عالی بین آیکون‌ها
+      padding: const EdgeInsets.symmetric(horizontal: 10.0),
       child: _AdvancedIconButton(
         icon: icon,
         color: color,
@@ -111,67 +112,56 @@ class _AdvancedSearchSheetState extends State<AdvancedSearchSheet> {
           controller: controller,
           physics: const BouncingScrollPhysics(),
           slivers: [
-            // هندل + عنوان
-          SliverToBoxAdapter(
-            child: Column(
-              children: [
-                // هندل بالا
-                Container(
-                  margin: const EdgeInsets.only(top: 16),
-                  width: 60,
-                  height: 7,
-                  decoration: BoxDecoration(
-                    color: Colors.grey[400],
-                    borderRadius: BorderRadius.circular(12),
+            // هدر با فلش برگشت
+            SliverToBoxAdapter(
+              child: Column(
+                children: [
+                  // هندل بالا
+                  Container(
+                    margin: const EdgeInsets.only(top: 16),
+                    width: 60,
+                    height: 7,
+                    decoration: BoxDecoration(
+                      color: Colors.grey[400],
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                   ),
-                ),
+                  const SizedBox(height: 16),
 
-                const SizedBox(height: 16),
-
-                // ردیف عنوان + دکمه برگشت
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Row(
-                    children: [
-                      // دکمه فلش برگشت
-                      IconButton(
-                        icon: const Icon(Icons.arrow_back_ios_new, color: Colors.black87, size: 24),
-                        onPressed: () {
-                          Navigator.of(context).pop(); // بستن AdvancedSearchSheet
-                          // دوباره باز کردن منوی اصلی جستجو
-                          Future.delayed(const Duration(milliseconds: 200), () {
-                            // این خط رو باید از NavigationMapScreen صدا بزنی
-                            // پس یه callback از بیرون بده
-                            widget.onClose(); // اول این می‌بنده
-                            // بعد از یه لحظه منوی اصلی رو باز کن
-                            // این قسمت رو باید از بیرون صدا بزنی — ادامه رو ببین
-                          });
-                        },
-                      ),
-                      const Expanded(
-                        child: Text(
-                          "جستجو در اطراف من",
-                          textAlign: TextAlign.center,
-                          style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                  // عنوان + دکمه برگشت
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    child: Row(
+                      children: [
+                        // فلش برگشت به منوی جستجو
+                        IconButton(
+                          icon: const Icon(Icons.arrow_back_ios_new, color: Colors.black87, size: 26),
+                          onPressed: widget.onBackToSearch, // این خط جادویی کار رو انجام میده
                         ),
-                      ),
-                      const SizedBox(width: 48), // فضای خالی سمت چپ برای تعادل
-                    ],
+                        const Expanded(
+                          child: Text(
+                            "جستجو در اطراف من",
+                            textAlign: TextAlign.center,
+                            style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                        const SizedBox(width: 48), // فضای خالی برای تعادل
+                      ],
+                    ),
                   ),
-                ),
-
-                const SizedBox(height: 10),
-              ],
+                  const SizedBox(height: 10),
+                ],
+              ),
             ),
-          ),
-            // آیکون‌های افقی اسکرول‌شو (تمیز و حرفه‌ای)
+
+            // ردیف آیکون‌ها
             SliverToBoxAdapter(
               child: SizedBox(
-                height: 80, // ارتفاع عالی
+                height: 80,
                 child: ListView(
                   scrollDirection: Axis.horizontal,
                   physics: const BouncingScrollPhysics(),
-                  padding: const EdgeInsets.symmetric(horizontal: 12), // فاصله از چپ و راست صفحه
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
                   children: [
                     _buildIconButton(Icons.coffee, Colors.brown.shade700, "کافه", () => _search('amenity=cafe', "کافه")),
                     _buildIconButton(Icons.restaurant_menu, Colors.orange.shade700, "رستوران", () => _search('amenity=restaurant', "رستوران")),
@@ -196,7 +186,7 @@ class _AdvancedSearchSheetState extends State<AdvancedSearchSheet> {
               ),
             ),
 
-            // لودینگ و نتایج (بدون تغییر)
+            // بقیه کد (لودینگ، نتایج، جستجوها) دقیقاً همون قبلی
             if (_isLoading)
               const SliverToBoxAdapter(
                 child: Padding(
@@ -246,7 +236,9 @@ class _AdvancedSearchSheetState extends State<AdvancedSearchSheet> {
                           title: Text(name, style: const TextStyle(fontSize: 15)),
                           subtitle: Text("$dist متر"),
                           trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-                          onTap: widget.onClose,
+                          onTap: () {
+                            widget.onClose();
+                          },
                         );
                       }),
                     ],
@@ -260,7 +252,7 @@ class _AdvancedSearchSheetState extends State<AdvancedSearchSheet> {
       ),
     );
   }
-
+  
   void _search(String query, String title) => _searchCategory(query, title);
 
   // همه جستجوها بعد از پر کردن نتایج، این خط رو صدا می‌زنن

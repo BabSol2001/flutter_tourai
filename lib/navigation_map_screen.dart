@@ -156,14 +156,12 @@ class _NavigationMapScreenState extends State<NavigationMapScreen>
         _isSelectingFromMap = false;
         _selectedDestination = point;
         _destinationController.text = coordsText.length > 35 ? "${coordsText.substring(0, 35)}..." : coordsText;
-
         _destinationMarker = Marker(
           point: point,
           width: 50,
           height: 50,
           child: const Icon(Icons.location_on, color: Colors.red, size: 50),
         );
-
         _pendingSearchText = coordsText;
       });
 
@@ -366,6 +364,28 @@ class _NavigationMapScreenState extends State<NavigationMapScreen>
     );
   }
 
+  // تابع جدید: باز کردن AdvancedSearch با امکان برگشت
+  void _openAdvancedSearch() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => DraggableScrollableSheet(
+        initialChildSize: 0.92,
+        minChildSize: 0.7,
+        maxChildSize: 0.98,
+        builder: (_, __) => AdvancedSearchSheet(
+          centerLocation: _selectedDestination!,
+          onClose: () => Navigator.pop(context),
+          onBackToSearch: () {
+            Navigator.pop(context);        // بستن AdvancedSearch
+            _openSearchFromFab();          // باز کردن دوباره منوی جستجو
+          },
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -509,11 +529,7 @@ class _IconActionButton extends StatelessWidget {
   final Color color;
   final VoidCallback onTap;
 
-  const _IconActionButton({
-    required this.icon,
-    required this.color,
-    required this.onTap,
-  });
+  const _IconActionButton({required this.icon, required this.color, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -542,13 +558,7 @@ class _AdvancedIconButton extends StatelessWidget {
   final VoidCallback onTap;
   final String tooltip;
 
-  const _AdvancedIconButton({
-    required this.icon,
-    required this.color,
-    required this.onTap,
-    required this.tooltip,
-    Key? key,
-  }) : super(key: key);
+  const _AdvancedIconButton({required this.icon, required this.color, required this.onTap, required this.tooltip, Key? key}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
@@ -572,9 +582,7 @@ class _AdvancedIconButton extends StatelessWidget {
               color: color.withOpacity(0.18),
               borderRadius: BorderRadius.circular(28),
               border: Border.all(color: color.withOpacity(0.7), width: 2.2),
-              boxShadow: [
-                BoxShadow(color: color.withOpacity(0.28), blurRadius: 12, offset: const Offset(0, 5)),
-              ],
+              boxShadow: [BoxShadow(color: color.withOpacity(0.28), blurRadius: 12, offset: const Offset(0, 5))],
             ),
             child: Icon(icon, color: color, size: 36),
           ),
@@ -596,30 +604,7 @@ class _SearchTopSheet extends StatelessWidget {
   Widget _buildIconButton(IconData icon, Color color, String tooltip, VoidCallback onTap) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 3.0),
-      child: _AdvancedIconButton(
-        icon: icon,
-        color: color,
-        tooltip: tooltip,
-        onTap: onTap,
-      ),
-    );
-  }
-
-  void _openAdvancedSearch(BuildContext context, {String query = '', String title = '', String? special}) {
-    Navigator.of(context).pop();
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => DraggableScrollableSheet(
-        initialChildSize: 0.9,
-        minChildSize: 0.7,
-        maxChildSize: 0.9,
-        builder: (_, __) => AdvancedSearchSheet(
-          centerLocation: state._selectedDestination!,
-          onClose: () => Navigator.pop(context),
-        ),
-      ),
+      child: _AdvancedIconButton(icon: icon, color: color, tooltip: tooltip, onTap: onTap),
     );
   }
 
@@ -635,9 +620,7 @@ class _SearchTopSheet extends StatelessWidget {
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(20),
-              boxShadow: [
-                BoxShadow(color: Colors.black.withOpacity(0.22), blurRadius: 20, offset: const Offset(0, 10)),
-              ],
+              boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.22), blurRadius: 20, offset: const Offset(0, 10))],
             ),
             child: Padding(
               padding: const EdgeInsets.all(20),
@@ -649,7 +632,6 @@ class _SearchTopSheet extends StatelessWidget {
                   const Text("جستجو و مسیریابی", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 5),
 
-                  // فیلد جستجو
                   TextField(
                     controller: state._searchController,
                     autofocus: true,
@@ -660,7 +642,6 @@ class _SearchTopSheet extends StatelessWidget {
                       suffixIcon: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          // موقعیت فعلی
                           SizedBox(
                             width: 30,
                             height: 30,
@@ -670,31 +651,22 @@ class _SearchTopSheet extends StatelessWidget {
                               iconSize: 25,
                               icon: const Icon(Icons.my_location, color: Colors.blue),
                               tooltip: "موقعیت فعلی من",
-                                                           onPressed: () async {
+                              onPressed: () async {
                                 await state._getCurrentLocation(force: true);
-
                                 if (state._currentPosition != null) {
                                   final pos = state._currentPosition!;
                                   final coords = "${pos.latitude.toStringAsFixed(6)}, ${pos.longitude.toStringAsFixed(6)}";
-
-                                  // اول منو رو ببند
                                   if (context.mounted) Navigator.of(context).pop();
-
-                                  // بعد از یه لحظه، متن رو بذار (چون منو دوباره با _openSearchFromFab باز میشه)
                                   Future.delayed(const Duration(milliseconds: 300), () {
                                     state._searchController.text = coords;
                                     state._pendingSearchText = coords;
                                     state._selectedDestination = LatLng(pos.latitude, pos.longitude);
                                     state._showSnackBar("موقعیت فعلی شما انتخاب شد", success: true);
                                   });
-                                } else {
-                                  state._showSnackBar("موقعیت در دسترس نیست", success: false);
                                 }
                               },
                             ),
                           ),
-
-                          // انتخاب از نقشه
                           SizedBox(
                             width: 30,
                             height: 30,
@@ -707,16 +679,10 @@ class _SearchTopSheet extends StatelessWidget {
                               onPressed: state._enableMapSelectionMode,
                             ),
                           ),
-
-                          // لودینگ یا پاک کردن
                           state._isSearchingPoint
                               ? const Padding(
                                   padding: EdgeInsets.only(left: 4, right: 8),
-                                  child: SizedBox(
-                                    width: 25,
-                                    height: 25,
-                                    child: CircularProgressIndicator(strokeWidth: 2),
-                                  ),
+                                  child: SizedBox(width: 25, height: 25, child: CircularProgressIndicator(strokeWidth: 2)),
                                 )
                               : SizedBox(
                                   width: 30,
@@ -730,7 +696,7 @@ class _SearchTopSheet extends StatelessWidget {
                                   ),
                                 ),
                         ],
-                      ),                      
+                      ),
                       filled: true,
                       fillColor: Colors.grey[100],
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
@@ -745,7 +711,6 @@ class _SearchTopSheet extends StatelessWidget {
 
                   const SizedBox(height: 10),
 
-                  // ردیف آیکون‌های جستجوی پیشرفته
                   if (state._selectedDestination != null)
                     SizedBox(
                       height: 60,
@@ -754,52 +719,43 @@ class _SearchTopSheet extends StatelessWidget {
                         physics: const BouncingScrollPhysics(),
                         padding: const EdgeInsets.symmetric(horizontal: 8),
                         children: [
-                          _buildIconButton(Icons.coffee, Colors.brown.shade700, "کافه", () => _openAdvancedSearch(context, query: 'amenity=cafe', title: "کافه")),
-                          _buildIconButton(Icons.restaurant_menu, Colors.orange.shade700, "رستوران", () => _openAdvancedSearch(context, query: 'amenity=restaurant', title: "رستوران")),
-                          _buildIconButton(Icons.local_gas_station, Colors.red.shade600, "پمپ بنزین", () => _openAdvancedSearch(context, query: 'amenity=fuel', title: "پمپ بنزین")),
-                          _buildIconButton(Icons.medication, Colors.teal.shade700, "داروخانه", () => _openAdvancedSearch(context, query: 'amenity=pharmacy', title: "داروخانه")),
-                          _buildIconButton(Icons.local_hospital, Colors.red.shade800, "بیمارستان", () => _openAdvancedSearch(context, query: 'amenity=hospital', title: "بیمارستان")),
-                          _buildIconButton(Icons.directions_bus, Colors.purple.shade700, "ایستگاه اتوبوس", () => _openAdvancedSearch(context, special: 'bus')),
-                          _buildIconButton(Icons.store_mall_directory, Colors.blue.shade700, "سوپرمارکت", () => _openAdvancedSearch(context, special: 'supermarket')),
-                          _buildIconButton(Icons.park, Colors.green.shade700, "پارک", () => _openAdvancedSearch(context, query: 'leisure=park', title: "پارک")),
-                          _buildIconButton(Icons.account_balance_outlined, Colors.indigo.shade700, "بانک", () => _openAdvancedSearch(context, special: 'bank')),
-                          _buildIconButton(FontAwesomeIcons.squareParking, Colors.green.shade800, "پارکینگ رایگان", () => _openAdvancedSearch(context, special: 'parking')),
-                          _buildIconButton(Icons.school, Colors.orange.shade800, "مدرسه و دانشگاه", () => _openAdvancedSearch(context, special: 'education')),
+                          _buildIconButton(Icons.coffee, Colors.brown.shade700, "کافه", () => state._openAdvancedSearch()),
+                          _buildIconButton(Icons.restaurant_menu, Colors.orange.shade700, "رستوران", () => state._openAdvancedSearch()),
+                          _buildIconButton(Icons.local_gas_station, Colors.red.shade600, "پمپ بنزین", () => state._openAdvancedSearch()),
+                          _buildIconButton(Icons.medication, Colors.teal.shade700, "داروخانه", () => state._openAdvancedSearch()),
+                          _buildIconButton(Icons.local_hospital, Colors.red.shade800, "بیمارستان", () => state._openAdvancedSearch()),
+                          _buildIconButton(Icons.directions_bus, Colors.purple.shade700, "ایستگاه اتوبوس", () => state._openAdvancedSearch()),
+                          _buildIconButton(Icons.store_mall_directory, Colors.blue.shade700, "سوپرمارکت", () => state._openAdvancedSearch()),
+                          _buildIconButton(Icons.park, Colors.green.shade700, "پارک", () => state._openAdvancedSearch()),
+                          _buildIconButton(Icons.account_balance_outlined, Colors.indigo.shade700, "بانک", () => state._openAdvancedSearch()),
+                          _buildIconButton(FontAwesomeIcons.squareParking, Colors.green.shade800, "پارکینگ رایگان", () => state._openAdvancedSearch()),
+                          _buildIconButton(Icons.school, Colors.orange.shade800, "مدرسه و دانشگاه", () => state._openAdvancedSearch()),
                         ],
                       ),
                     ),
 
                   const SizedBox(height: 20),
 
-                  // دکمه‌های پایین
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                     children: [
-                      _IconActionButton(
-                        icon: Icons.directions,
-                        color: Colors.blue.shade600,
-                        onTap: () async {
-                          final q = state._searchController.text.trim();
-                          if (q.isEmpty) return;
-                          await state._searchPoint(q);
-                          if (state._selectedDestination != null) {
-                            state._destinationController.text = q;
-                            state._modeNotifier.value = state._selectedMode;
-                            Navigator.of(context).pop();
-                            state._openRoutingPanel();
-                          }
-                        },
-                      ),
-                      _IconActionButton(
-                        icon: Icons.search_rounded,
-                        color: Colors.green.shade600,
-                        onTap: () {
-                          if (state._searchController.text.trim().isNotEmpty) {
-                            state._searchPoint(state._searchController.text);
-                            Navigator.of(context).pop();
-                          }
-                        },
-                      ),
+                      _IconActionButton(icon: Icons.directions, color: Colors.blue.shade600, onTap: () async {
+                        final q = state._searchController.text.trim();
+                        if (q.isEmpty) return;
+                        await state._searchPoint(q);
+                        if (state._selectedDestination != null) {
+                          state._destinationController.text = q;
+                          state._modeNotifier.value = state._selectedMode;
+                          Navigator.of(context).pop();
+                          state._openRoutingPanel();
+                        }
+                      }),
+                      _IconActionButton(icon: Icons.search_rounded, color: Colors.green.shade600, onTap: () {
+                        if (state._searchController.text.trim().isNotEmpty) {
+                          state._searchPoint(state._searchController.text);
+                          Navigator.of(context).pop();
+                        }
+                      }),
                       if (state._selectedDestination != null)
                         _IconActionButton(icon: Icons.share, color: Colors.purple.shade600, onTap: () {
                           showModalBottomSheet(
@@ -824,29 +780,29 @@ class _SearchTopSheet extends StatelessWidget {
                             ),
                           );
                         }),
-                        if (state._selectedDestination != null)
-                          _IconActionButton(
-                            icon: Icons.smart_toy, // آیکون هوش مصنوعی
-                            color: Colors.deepPurple.shade600,
-                            onTap: () {
-                              Navigator.of(context).pop(); // منو رو ببند
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Row(
-                                    children: [
-                                      Icon(Icons.smart_toy, color: Colors.white),
-                                      SizedBox(width: 12),
-                                      Text("جستجو با هوش مصنوعی به‌زودی فعال می‌شود!"),
-                                    ],
-                                  ),
-                                  backgroundColor: Colors.deepPurple,
-                                  duration: Duration(seconds: 3),
-                                  behavior: SnackBarBehavior.floating,
+                      if (state._selectedDestination != null)
+                        _IconActionButton(
+                          icon: Icons.smart_toy,
+                          color: Colors.deepPurple.shade600,
+                          onTap: () {
+                            Navigator.of(context).pop();
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Row(
+                                  children: [
+                                    Icon(Icons.smart_toy, color: Colors.white),
+                                    SizedBox(width: 12),
+                                    Text("جستجو با هوش مصنوعی به‌زودی فعال می‌شود!"),
+                                  ],
                                 ),
-                              );
-                            },
-                          ),                    
-                        ],
+                                backgroundColor: Colors.deepPurple,
+                                duration: Duration(seconds: 3),
+                                behavior: SnackBarBehavior.floating,
+                              ),
+                            );
+                          },
+                        ),
+                    ],
                   ),
 
                   const SizedBox(height: 10),
