@@ -59,8 +59,6 @@ class _NavigationMapScreenState extends State<NavigationMapScreen>
   String? _pendingSearchText;
   bool _isSelectingFromMap = false;
 
-  bool _isSearchMinimized = false;
-
   static const String baseUrl = "http://192.168.0.105:8000";
 
   final List<Map<String, dynamic>> transportModes = [
@@ -287,10 +285,7 @@ class _NavigationMapScreenState extends State<NavigationMapScreen>
   }
 
   void _openSearchFromFab() {
-
-    setState(() {
-    _isSearchMinimized = false; 
-    });
+    _searchController.clear();
 
     if (_pendingSearchText != null) {
       Future.delayed(const Duration(milliseconds: 100), () {
@@ -315,9 +310,7 @@ class _NavigationMapScreenState extends State<NavigationMapScreen>
           );
         },
       ).then((_) {
-        if (!_isSearchMinimized) {
         _searchController.clear();
-        }
         _pendingSearchText = null;
       });
     });
@@ -452,9 +445,9 @@ void _openAdvancedSearch({String? autoSearch}) {
               children: [
                 FloatingActionButton(
                   heroTag: "search",
-                  backgroundColor: _isSearchMinimized ? Colors.blue : Colors.white, 
+                  backgroundColor: Colors.white,
                   onPressed: _openSearchFromFab,
-                  child: Icon(Icons.search, color: _isSearchMinimized ? Colors.white : Colors.black87),
+                  child: const Icon(Icons.search, color: Colors.black87),
                 ),
                 const SizedBox(height: 12),
                 FloatingActionButton.small(
@@ -604,7 +597,6 @@ class _AdvancedIconButton extends StatelessWidget {
    -------------------------------------------------------------- */
 
 class _SearchTopSheet extends StatelessWidget {
-
   final _NavigationMapScreenState state;
 
   const _SearchTopSheet({required this.state});
@@ -635,46 +627,6 @@ class _SearchTopSheet extends StatelessWidget {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      // گوشه سمت چپ: دکمه‌های مینیمایز و بستن
-                      Row(
-                        children: [
-                          // دکمه مینیمایز (-)
-                          IconButton(
-                            icon: const Icon(Icons.remove, color: Colors.grey, size: 28),
-                            tooltip: "مینیمایز",
-                            onPressed: () {
-                              // اینجا می‌گیم: اول حالت رو ببر روی مینیمایز!
-                              state.setState(() {
-                                state._isSearchMinimized = true; 
-                              });
-                              // بعد منو رو ببند.
-                              Navigator.of(context).pop();                              
-                            },
-                          ),
-                          const SizedBox(width: 8),
-                          // دکمه بستن (X)
-                          IconButton(
-                            icon: const Icon(Icons.close, color: Colors.grey, size: 28),
-                            tooltip: "بستن",
-                            onPressed: () {// دکمه بستن باید حالت مینیمایز رو غیرفعال کنه!
-                              state.setState(() {
-                                state._isSearchMinimized = false; 
-                              });
-                              // بعد منو رو ببند.
-                              Navigator.of(context).pop();
-                            },
-                          ),
-                        ],
-                      ),
-                      // گوشه سمت راست: (فعلاً خالی می‌ذاریم)
-                      const SizedBox(width: 60), // فضای لازم برای تراز شدن
-                    ],
-                  ),
-
                   Container(width: 50, height: 5, decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(10))),
                   const SizedBox(height: 5),
                   const Text("جستجو و مسیریابی", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
@@ -759,7 +711,7 @@ class _SearchTopSheet extends StatelessWidget {
 
                   const SizedBox(height: 10),
 
-                  //if (state._selectedDestination != null)
+                  if (state._selectedDestination != null)
                     SizedBox(
                       height: 60,
                       child: ListView(
@@ -809,13 +761,11 @@ class _SearchTopSheet extends StatelessWidget {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                     children: [
-                      
                       _IconActionButton(icon: Icons.directions, color: Colors.blue.shade600, onTap: () async {
                         final q = state._searchController.text.trim();
                         if (q.isEmpty) return;
                         await state._searchPoint(q);
-                        if (state._selectedDestination != null) 
-                        {
+                        if (state._selectedDestination != null) {
                           state._destinationController.text = q;
                           state._modeNotifier.value = state._selectedMode;
                           Navigator.of(context).pop();
@@ -828,7 +778,7 @@ class _SearchTopSheet extends StatelessWidget {
                           Navigator.of(context).pop();
                         }
                       }),
-                      //if (state._selectedDestination != null)
+                      if (state._selectedDestination != null)
                         _IconActionButton(icon: Icons.share, color: Colors.purple.shade600, onTap: () {
                           ShareLocationButton.shareLocationStatic(
                               location: state._selectedDestination!,
@@ -838,7 +788,7 @@ class _SearchTopSheet extends StatelessWidget {
                               message: "اینجا را پیدا کردم!",
                             );
                         }),
-                      //if (state._selectedDestination != null)
+                      if (state._selectedDestination != null)
                         _IconActionButton(
                           icon: Icons.smart_toy,
                           color: Colors.deepPurple.shade600,
