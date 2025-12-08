@@ -11,8 +11,6 @@ import 'package:share_plus/share_plus.dart';
 import 'navigation/widgets/routing_card.dart';
 import 'navigation/widgets/share.dart';
 import 'navigation/widgets/advanced_search.dart';
-// 👇 ماژول جدید مدیریت تاریخچه
-import 'navigation/widgets/history_manager.dart';
 
 class NavigationMapScreen extends StatefulWidget {
   final bool isDarkMode;
@@ -73,9 +71,6 @@ class _NavigationMapScreenState extends State<NavigationMapScreen>
     {"mode": "pedestrian", "engine": "valhalla", "name": "پیاده", "icon": Icons.directions_walk},
   ];
 
-  // 👇 ایجاد نمونه از کلاس مدیریت تاریخچه
-  final SearchHistoryManager _historyManager = SearchHistoryManager();
-
   @override
   void initState() {
     super.initState();
@@ -83,10 +78,6 @@ class _NavigationMapScreenState extends State<NavigationMapScreen>
     _modeNotifier.value = _selectedMode;
     _setupAnimations();
     _getCurrentLocation();
-    // 👇 بارگذاری تاریخچه هنگام شروع
-    _historyManager.loadHistory().then((_) {
-      if(mounted) setState(() {});
-    });
   }
 
   @override
@@ -380,16 +371,8 @@ class _NavigationMapScreenState extends State<NavigationMapScreen>
     );
   }
 
-  // تابع اصلاح شده: باز کردن AdvancedSearch با رفع مشکل crash
-  void _openAdvancedSearch({String? autoSearch}) {
-    // اگر مقصدی انتخاب نشده بود، از موقعیت فعلی یا موقعیت پیش فرض (تهران) استفاده کن
-    final LatLng? center = _selectedDestination ?? 
-                            (_currentPosition != null 
-                                ? LatLng(_currentPosition!.latitude, _currentPosition!.longitude) 
-                                : null); 
-    
-    final LatLng finalCenter = center ?? const LatLng(35.6892, 51.3890); // تهران
-
+  // تابع جدید: باز کردن AdvancedSearch با امکان برگشت
+void _openAdvancedSearch({String? autoSearch}) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -399,72 +382,17 @@ class _NavigationMapScreenState extends State<NavigationMapScreen>
         minChildSize: 0.7,
         maxChildSize: 0.98,
         builder: (_, __) => AdvancedSearchSheet(
-          centerLocation: finalCenter, // 👈 استفاده از مکان امن
+          centerLocation: _selectedDestination!,
           onClose: () => Navigator.pop(context),
           onBackToSearch: () {
             Navigator.pop(context);
             _openSearchFromFab();
           },
-          autoSearchCategory: autoSearch,
+          autoSearchCategory: autoSearch, // این خط اضافه شد
         ),
       ),
     );
   }
-
-  // 👇 به‌روزرسانی _searchPoint برای ذخیره تاریخچه
-  Future<void> _searchPoint(String query) async {
-    if (query.trim().isEmpty) return;
-
-    // 👈 ذخیره جستجوی موفق با ماژول جدید
-    await _historyManager.saveQuery(query);
-    if(mounted) setState(() {}); // به‌روزرسانی UI تاریخچه
-    
-    setState(() => _isSearchingPoint = true);
-
-    final url = Uri.parse(
-        'https://nominatim.openstreetmap.org/search?q=${Uri.encodeComponent(query)}&format=json&limit=1&accept-language=fa');
-    try {
-      final res = await http.get(url, headers: {'User-Agent': 'TourAI/1.0'});
-      if (res.statusCode == 200) {
-        final List data = json.decode(res.body);
-        if (data.isNotEmpty) {
-          final lat = double.parse(data[0]['lat']);
-          final lon = double.parse(data[0]['lon']);
-          final point = LatLng(lat, lon);
-          final name = (data[0]['display_name'] as String).split(',').first.trim();
-
-          setState(() {
-            _tempSearchMarker = Marker(
-              point: point,
-              width: 50,
-              height: 50,
-              child: const Icon(Icons.location_searching, color: Colors.purple, size: 50),
-            );
-            _selectedDestination = point;
-            _destinationController.text = name.length > 35 ? "${name.substring(0, 35)}..." : name;
-            _destinationMarker = Marker(
-              point: point,
-              width: 50,
-              height: 50,
-              child: const Icon(Icons.location_on, color: Colors.red, size: 50),
-            );
-          });
-
-          _mapController.move(point, 16);
-          _showSnackBar("پیدا شد: $name", success: true);
-
-          Future.delayed(const Duration(seconds: 8), () {
-            if (mounted) setState(() => _tempSearchMarker = null);
-          });
-        }
-      }
-    } catch (e) {
-      _showSnackBar("خطا در جستجو");
-    } finally {
-      if (mounted) setState(() => _isSearchingPoint = false);
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -549,6 +477,54 @@ class _NavigationMapScreenState extends State<NavigationMapScreen>
       ),
     );
   }
+
+  Future<void> _searchPoint(String query) async {
+    if (query.trim().isEmpty) return;
+    setState(() => _isSearchingPoint = true);
+
+    final url = Uri.parse(
+        'https://nominatim.openstreetmap.org/search?q=${Uri.encodeComponent(query)}&format=json&limit=1&accept-language=fa');
+    try {
+      final res = await http.get(url, headers: {'User-Agent': 'TourAI/1.0'});
+      if (res.statusCode == 200) {
+        final List data = json.decode(res.body);
+        if (data.isNotEmpty) {
+          final lat = double.parse(data[0]['lat']);
+          final lon = double.parse(data[0]['lon']);
+          final point = LatLng(lat, lon);
+          final name = (data[0]['display_name'] as String).split(',').first.trim();
+
+          setState(() {
+            _tempSearchMarker = Marker(
+              point: point,
+              width: 50,
+              height: 50,
+              child: const Icon(Icons.location_searching, color: Colors.purple, size: 50),
+            );
+            _selectedDestination = point;
+            _destinationController.text = name.length > 35 ? "${name.substring(0, 35)}..." : name;
+            _destinationMarker = Marker(
+              point: point,
+              width: 50,
+              height: 50,
+              child: const Icon(Icons.location_on, color: Colors.red, size: 50),
+            );
+          });
+
+          _mapController.move(point, 16);
+          _showSnackBar("پیدا شد: $name", success: true);
+
+          Future.delayed(const Duration(seconds: 8), () {
+            if (mounted) setState(() => _tempSearchMarker = null);
+          });
+        }
+      }
+    } catch (e) {
+      _showSnackBar("خطا در جستجو");
+    } finally {
+      if (mounted) setState(() => _isSearchingPoint = false);
+    }
+  }
 }
 
 /* --------------------------------------------------------------
@@ -623,77 +599,25 @@ class _AdvancedIconButton extends StatelessWidget {
   }
 }
 
-// 👇 ویجت جدید برای نمایش هر آیتم تاریخچه
-class _HistoryTile extends StatelessWidget {
-  final String query;
-  final VoidCallback onTap;
-  final VoidCallback onRemove;
-
-  const _HistoryTile({required this.query, required this.onTap, required this.onRemove});
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 4.0),
-        child: Row(
-          children: [
-            const Icon(Icons.history, color: Colors.grey, size: 20),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                query,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 15, color: Colors.black87),
-              ),
-            ),
-            IconButton(
-              icon: const Icon(Icons.close, color: Colors.grey, size: 20),
-              tooltip: "حذف از تاریخچه",
-              onPressed: onRemove,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
 /* --------------------------------------------------------------
-   منوی جستجو + ردیف آیکون‌ها (با تاریخچه)
+   منوی جستجو + ردیف آیکون‌ها
    -------------------------------------------------------------- */
 
-// 1. کلاس _SearchTopSheet (فقط شامل متغیر و createSate)
-class _SearchTopSheet extends StatefulWidget {
+class _SearchTopSheet extends StatelessWidget {
+
   final _NavigationMapScreenState state;
 
-  // 👈 اصلاح: حذف خط خطا و افزودن super.key
-  const _SearchTopSheet({required this.state, super.key}); 
+  const _SearchTopSheet({required this.state});
 
-  @override
-  State<_SearchTopSheet> createState() => _SearchTopSheetState();
-}
-
-// 2. پیاده‌سازی State (اکنون می‌توان به widget.state دسترسی داشت)
-class _SearchTopSheetState extends State<_SearchTopSheet> {
-  
   Widget _buildIconButton(IconData icon, Color color, String tooltip, VoidCallback onTap) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 3.0),
-      // _AdvancedIconButton باید در همین فایل تعریف شده باشد (قبلا در پایین فایل وجود داشت)
-      child: _AdvancedIconButton(icon: icon, color: color, tooltip: tooltip, onTap: onTap), 
+      child: _AdvancedIconButton(icon: icon, color: color, tooltip: tooltip, onTap: onTap),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    // 👈 دسترسی به لیست تاریخچه از طریق ماژول جدید
-    // 👈 دسترسی به state از طریق widget
-    final _NavigationMapScreenState state = widget.state;
-    final List<String> history = state._historyManager.history;
-    
     return Material(
       color: Colors.transparent,
       child: SafeArea(
@@ -833,47 +757,9 @@ class _SearchTopSheetState extends State<_SearchTopSheet> {
                     },
                   ),
 
-                  // 👇 بخش جدید: نمایش تاریخچه جستجو
-                  if (history.isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 15, bottom: 5),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              const Text("تاریخچه جستجو", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black87)),
-                              TextButton(
-                                onPressed: () async {
-                                  await state._historyManager.clearHistory(); // 👈 فراخوانی تابع از ماژول جدید
-                                  state.setState(() {}); // به‌روزرسانی UI
-                                },
-                                child: const Text("پاک کردن همه", style: TextStyle(color: Colors.red, fontSize: 13)),
-                              ),
-                            ],
-                          ),
-                          const Divider(height: 1, thickness: 0.5),
-                          ...history.take(4).map((query) => _HistoryTile(
-                                query: query,
-                                onTap: () {
-                                  state._searchController.text = query;
-                                  state._searchPoint(query);
-                                  Navigator.of(context).pop();
-                                },
-                                onRemove: () async {
-                                  await state._historyManager.removeHistoryItem(query); // 👈 فراخوانی تابع از ماژول جدید
-                                  state.setState(() {}); // به‌روزرسانی UI
-                                },
-                              )).toList(),
-                        ],
-                      ),
-                    ),
-                  // 👆 پایان بخش تاریخچه جستجو
-
                   const SizedBox(height: 10),
 
-                  //if (state._selectedDestination != null) // این شرط قبلا حذف شده
+                  //if (state._selectedDestination != null)
                     SizedBox(
                       height: 60,
                       child: ListView(
@@ -928,7 +814,7 @@ class _SearchTopSheetState extends State<_SearchTopSheet> {
                         final q = state._searchController.text.trim();
                         if (q.isEmpty) return;
                         await state._searchPoint(q);
-                        //if (state._selectedDestination != null) 
+                        if (state._selectedDestination != null) 
                         {
                           state._destinationController.text = q;
                           state._modeNotifier.value = state._selectedMode;
@@ -944,11 +830,6 @@ class _SearchTopSheetState extends State<_SearchTopSheet> {
                       }),
                       //if (state._selectedDestination != null)
                         _IconActionButton(icon: Icons.share, color: Colors.purple.shade600, onTap: () {
-                          // 👇 اضافه کردن چک null
-                          if (state._selectedDestination == null) {
-                            state._showSnackBar("مقصد انتخاب نشده است!", success: false);
-                            return;
-                          }
                           ShareLocationButton.shareLocationStatic(
                               location: state._selectedDestination!,
                               placeName: state._searchController.text.trim().isNotEmpty
