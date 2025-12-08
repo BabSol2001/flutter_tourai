@@ -6,7 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// وظیفه اصلی: تعامل با SharedPreferences برای ذخیره و بازیابی لیست جستجوها.
 class SearchHistoryManager {
   static const String _historyKey = 'searchHistory';
-  static const int _maxHistorySize = 50;
+  static const int _maxHistorySize = 10;
   
   // لیست تاریخچه که در حافظه نگهداری می‌شود
   List<String> _history = [];
@@ -53,8 +53,8 @@ class SearchHistoryManager {
 
   /// پاک کردن کل تاریخچه
   Future<void> clearHistory() async {
-    //final prefs = await SharedPreferences.getInstance();
-    //await prefs.remove(_historyKey);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_historyKey);
     _history = []; // پاک کردن لیست در حافظه
   }
 }

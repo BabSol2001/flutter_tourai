@@ -86,7 +86,6 @@ class _AdvancedSearchSheetState extends State<AdvancedSearchSheet> {
   bool _sortByDistance = true;
   List<Map<String, dynamic>> _results = [];
   final Distance distance = const Distance();
-  String _currentSearchTitle = "جستجوی مراکز پرکاربرد"; // عنوان پیش‌فرض
 
   Widget _buildIconButton(IconData icon, Color color, String tooltip, VoidCallback onTap) {
     return Padding(
@@ -218,11 +217,11 @@ class _AdvancedSearchSheetState extends State<AdvancedSearchSheet> {
                           icon: const Icon(Icons.arrow_back_ios_new, color: Colors.black87, size: 26),
                           onPressed: widget.onBackToSearch, // این خط جادویی کار رو انجام میده
                         ),
-                        Expanded( // حذف const
-                          child: Text( // حذف const
-                            _currentSearchTitle, // استفاده از عنوان پویا
+                        const Expanded(
+                          child: Text(
+                            "جستجو در اطراف من",
                             textAlign: TextAlign.center,
-                            style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                            style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
                           ),
                         ),
                         const SizedBox(width: 48), // فضای خالی برای تعادل
@@ -243,21 +242,21 @@ class _AdvancedSearchSheetState extends State<AdvancedSearchSheet> {
                   physics: const BouncingScrollPhysics(),
                   padding: const EdgeInsets.symmetric(horizontal: 12),
                   children: [
-                    _buildIconButton(Icons.coffee, Colors.brown.shade700, "کافه", () => _search('amenity=cafe', "کافه‌های اطراف")),
-                    _buildIconButton(Icons.restaurant_menu, Colors.orange.shade700, "رستوران", () => _search('amenity=restaurant', "رستوران‌های اطراف")),
-                    _buildIconButton(Icons.local_gas_station, Colors.red.shade600, "پمپ بنزین", () => _search('amenity=fuel', "پمپ بنزین‌ها و جایگاه‌های سوخت")),
-                    _buildIconButton(Icons.medication, Colors.teal.shade700, "داروخانه", () => _search('amenity=pharmacy', "داروخانه‌های اطراف")),
-                    _buildIconButton(Icons.ev_station, Colors.cyan.shade700, "ایستگاه شارژ برقی", () => _search('amenity=charging_station', "ایستگاه شارژ برقی")),
+                    _buildIconButton(Icons.coffee, Colors.brown.shade700, "کافه", () => _search('amenity=cafe', "کافه")),
+                    _buildIconButton(Icons.restaurant_menu, Colors.orange.shade700, "رستوران", () => _search('amenity=restaurant', "رستوران")),
+                    _buildIconButton(Icons.local_gas_station, Colors.red.shade600, "پمپ بنزین", () => _search('amenity=fuel', "پمپ بنزین")),
+                    _buildIconButton(Icons.medication, Colors.teal.shade700, "داروخانه", () => _search('amenity=pharmacy', "داروخانه")),
+                    _buildIconButton(Icons.ev_station, Colors.cyan.shade700, "ایستگاه شارژ برقی", () => _search('amenity=charging_station', "شارژ برقی")),
                     _buildIconButton(Icons.electric_bike, Colors.lime.shade700, "کرایه دوچرخه", () => _search('amenity=bicycle_rental', "کرایه دوچرخه")),
-                    _buildIconButton(Icons.local_hospital, Colors.red.shade800, "بیمارستان", () => _search('amenity=hospital', "بیمارستان‌ها و مراکز درمانی")),
+                    _buildIconButton(Icons.local_hospital, Colors.red.shade800, "بیمارستان", () => _search('amenity=hospital', "بیمارستان")),
                     _buildIconButton(Icons.directions_bus, Colors.purple.shade700, "ایستگاه اتوبوس", _searchBusStops),
-                    _buildIconButton(Icons.train, Colors.deepPurple.shade700, "ایستگاه مترو", () => _search('railway=station AND (station=subway OR railway=subway)', "ایستگاه مترو")),
+                    _buildIconButton(Icons.train, Colors.deepPurple.shade700, "ایستگاه مترو", () => _search('railway=station AND (station=subway OR railway=subway)', "مترو")),
                     _buildIconButton(Icons.store_mall_directory, Colors.blue.shade700, "سوپرمارکت محلی", _searchSupermarket),
-                    _buildIconButton(Icons.park, Colors.green.shade700, "پارک", () => _search('leisure=park', "پارک‌ها و فضای سبز")),
+                    _buildIconButton(Icons.park, Colors.green.shade700, "پارک", () => _search('leisure=park', "پارک")),
                     _buildIconButton(Icons.synagogue_outlined, Colors.deepPurple.shade600, "عبادتگاه", _searchPlacesOfWorship),
                     _buildIconButton(Icons.history_edu, Colors.amber.shade800, "جاذبه تاریخی و دیدنی", _searchTouristAttractions),
                     _buildIconButton(Icons.account_balance_outlined, Colors.indigo.shade700, "بانک و خودپرداز", _searchBanksAndAtms),
-                    _buildIconButton(Icons.local_parking, Colors.grey.shade700, "پارکینگ عمومی", () => _search('amenity=parking', "پارکینگ عمومی")),
+                    _buildIconButton(Icons.local_parking, Colors.grey.shade700, "پارکینگ عمومی", () => _search('amenity=parking', "پارکینگ")),
                     _buildIconButton(FontAwesomeIcons.squareParking, Colors.green.shade800, "پارکینگ رایگان کنار خیابان", _searchFreeStreetParking),
                     _buildIconButton(Icons.storefront_outlined, const Color(0xFFE64A19), "فروشگاه زنجیره‌ای بزرگ", _searchChainStoresFromBackend),
                     _buildIconButton(Icons.school, Colors.orange.shade800, "مراکز آموزشی", _searchEducationalPlaces),
@@ -360,7 +359,6 @@ class _AdvancedSearchSheetState extends State<AdvancedSearchSheet> {
     setState(() {
       _isLoading = true;
       _results.clear();
-      _currentSearchTitle = title; // 👈 بروزرسانی عنوان
     });
 
     final lat = widget.centerLocation.latitude;
@@ -387,20 +385,16 @@ class _AdvancedSearchSheetState extends State<AdvancedSearchSheet> {
         });
       }
     } catch (e) {
-      setState(() {
-        _currentSearchTitle = "خطا در جستجو ($title)";
-      });
+      // ساکت
     } finally {
       setState(() => _isLoading = false);
     }
   }
 
   Future<void> _searchBusStops() async {
-    const title = "ایستگاه‌های اتوبوس و تاکسی";
     setState(() {
       _isLoading = true;
       _results.clear();
-      _currentSearchTitle = title; // 👈 بروزرسانی عنوان
     });
 
     final lat = widget.centerLocation.latitude;
@@ -428,9 +422,7 @@ class _AdvancedSearchSheetState extends State<AdvancedSearchSheet> {
         });
       }
     } catch (e) {
-      setState(() {
-        _currentSearchTitle = "خطا در جستجوی ایستگاه‌ها";
-      });
+      // ساکت
     } finally {
       setState(() => _isLoading = false);
     }
@@ -438,11 +430,9 @@ class _AdvancedSearchSheetState extends State<AdvancedSearchSheet> {
 
   // تابع مخصوص سوپرمارکت معمولی — بدون مشکل پارسینگ
   Future<void> _searchSupermarket() async {
-    const title = "سوپرمارکت‌ها و فروشگاه‌های محلی";
     setState(() {
       _isLoading = true;
       _results.clear();
-      _currentSearchTitle = title; // 👈 بروزرسانی عنوان
     });
 
     final lat = widget.centerLocation.latitude;
@@ -471,9 +461,6 @@ class _AdvancedSearchSheetState extends State<AdvancedSearchSheet> {
       }
     } catch (e) {
       print("خطا در سوپرمارکت: $e");
-      setState(() {
-        _currentSearchTitle = "خطا در جستجوی سوپرمارکت‌ها";
-      });
     } finally {
       setState(() => _isLoading = false);
     }
@@ -481,11 +468,9 @@ class _AdvancedSearchSheetState extends State<AdvancedSearchSheet> {
 
   // جستجوی همه عبادتگاه‌ها: مسجد، کلیسا، کنیسه، معبد، آتشکده و ...
   Future<void> _searchPlacesOfWorship() async {
-    const title = "عبادتگاه‌ها (مسجد، کلیسا و...)";
     setState(() {
       _isLoading = true;
       _results.clear();
-      _currentSearchTitle = title; // 👈 بروزرسانی عنوان
     });
 
     final lat = widget.centerLocation.latitude;
@@ -513,9 +498,6 @@ class _AdvancedSearchSheetState extends State<AdvancedSearchSheet> {
       }
     } catch (e) {
       print("خطا در عبادتگاه: $e");
-      setState(() {
-        _currentSearchTitle = "خطا در جستجوی عبادتگاه‌ها";
-      });
     } finally {
       setState(() => _isLoading = false);
     }
@@ -523,11 +505,9 @@ class _AdvancedSearchSheetState extends State<AdvancedSearchSheet> {
 
   // جستجوی جاذبه‌های تاریخی و دیدنی — مخصوص اشپایر و همه جای دنیا!
   Future<void> _searchTouristAttractions() async {
-    const title = "جاذبه‌های تاریخی و دیدنی";
     setState(() {
       _isLoading = true;
       _results.clear();
-      _currentSearchTitle = title; // 👈 بروزرسانی عنوان
     });
 
     final lat = widget.centerLocation.latitude;
@@ -564,9 +544,6 @@ class _AdvancedSearchSheetState extends State<AdvancedSearchSheet> {
       }
     } catch (e) {
       print("خطا در جاذبه‌ها: $e");
-      setState(() {
-        _currentSearchTitle = "خطا در جستجوی جاذبه‌های دیدنی";
-      });
     } finally {
       setState(() => _isLoading = false);
     }
@@ -574,11 +551,9 @@ class _AdvancedSearchSheetState extends State<AdvancedSearchSheet> {
 
   // جستجوی بانک و خودپرداز — ۱۰۰٪ درست و تست‌شده
   Future<void> _searchBanksAndAtms() async {
-    const title = "بانک‌ها و خودپردازهای اطراف";
     setState(() {
       _isLoading = true;
       _results.clear();
-      _currentSearchTitle = title; // 👈 بروزرسانی عنوان
     });
 
     final lat = widget.centerLocation.latitude;
@@ -607,20 +582,15 @@ class _AdvancedSearchSheetState extends State<AdvancedSearchSheet> {
       }
     } catch (e) {
       print("خطا در بانک/خودپرداز: $e");
-      setState(() {
-        _currentSearchTitle = "خطا در جستجوی بانک‌ها";
-      });
     } finally {
       setState(() => _isLoading = false);
     }
   }
 
   Future<void> _searchFreeStreetParking() async {
-    const title = "پارکینگ‌های رایگان کنار خیابان";
     setState(() {
       _isLoading = true;
       _results.clear();
-      _currentSearchTitle = title; // 👈 بروزرسانی عنوان
     });
 
     final lat = widget.centerLocation.latitude;
@@ -652,20 +622,15 @@ class _AdvancedSearchSheetState extends State<AdvancedSearchSheet> {
       }
     } catch (e) {
       print("خطا در پارکینگ مفتی: $e");
-      setState(() {
-        _currentSearchTitle = "خطا در جستجوی پارکینگ";
-      });
     } finally {
       setState(() => _isLoading = false);
     }
-  } // جستجوی پارکینگ رایگان کنار خیابان — ۱۰۰٪ درست و تست‌شده (آلمان + ایران)
+  }  // جستجوی پارکینگ رایگان کنار خیابان — ۱۰۰٪ درست و تست‌شده (آلمان + ایران)
 
   Future<void> _searchChainStoresFromBackend() async {
-    const title = "فروشگاه‌های زنجیره‌ای بزرگ";
     setState(() {
       _isLoading = true;
       _results.clear();
-      _currentSearchTitle = title; // 👈 بروزرسانی عنوان
       _sortResultsByDistance();
     });
 
@@ -706,11 +671,9 @@ class _AdvancedSearchSheetState extends State<AdvancedSearchSheet> {
 
   // جستجوی مراکز آموزشی — دانشگاه، مدرسه، مهدکودک، آموزشگاه و ...
   Future<void> _searchEducationalPlaces() async {
-    const title = "مراکز آموزشی (مدرسه، دانشگاه،...)";
     setState(() {
       _isLoading = true;
       _results.clear();
-      _currentSearchTitle = title; // 👈 بروزرسانی عنوان
     });
 
     final lat = widget.centerLocation.latitude;
@@ -741,9 +704,6 @@ class _AdvancedSearchSheetState extends State<AdvancedSearchSheet> {
       }
     } catch (e) {
       print("خطا در مراکز آموزشی: $e");
-      setState(() {
-        _currentSearchTitle = "خطا در جستجوی مراکز آموزشی";
-      });
     } finally {
       setState(() => _isLoading = false);
     }
