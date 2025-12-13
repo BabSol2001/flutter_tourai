@@ -77,8 +77,6 @@ class _NavigationMapScreenState extends State<NavigationMapScreen>
   // 👇 ایجاد نمونه از کلاس مدیریت تاریخچه
   final SearchHistoryManager _historyManager = SearchHistoryManager();
 
-  
-
   @override
   void initState() {
     super.initState();
@@ -265,49 +263,37 @@ class _NavigationMapScreenState extends State<NavigationMapScreen>
         '$baseUrl/api/v1/osm/smart-route/?start_lat=$startLat&start_lon=$startLon&end_lat=${_selectedDestination!.latitude}&end_lon=${_selectedDestination!.longitude}&engine=$_selectedEngine&mode=$_selectedMode');
 
     try {
-  final res = await http.get(url).timeout(const Duration(seconds: 30));
-  if (res.statusCode == 200) {
-    final data = json.decode(res.body);
-    if (data['success'] == true) {
-      List<Polyline> lines = [];
-
-for (var r in (data['routes'] ?? [data])) {
-  var coords = r['route_coords'] as List;
-
-  final bool isBicycle = _selectedMode == "bicycle";
-  final bool isMotorcycle = _selectedMode == "motorcycle";
-  final bool isPedestrian = _selectedMode == "pedestrian";
-
-  lines.add(Polyline(
-    points: coords.map((c) => LatLng(c[1].toDouble(), c[0].toDouble())).toList(),
-    strokeWidth: (isBicycle || isMotorcycle || isPedestrian) ? 10.0 : 15.0,
-    color: isMotorcycle
-        ? Colors.purple.shade600
-        : isBicycle
-            ? Colors.green.shade700
-            : isPedestrian
-                ? Colors.teal.shade700
-                : _selectedMode == "truck"
-                    ? Colors.orange
-                    : Colors.blue,
-    // خط‌چین و نقطه‌چین واقعی در نسخه 8.2.2
-    pattern: isPedestrian
-        ? const StrokePattern.dotted(spacingFactor: 1.3)  // نقطه‌چین فاصله‌دار (۴ پیکسل نقطه، ۲۸ پیکسل فاصله)
-        : (isBicycle || isMotorcycle)
-            ? StrokePattern.dashed(segments: const [7.0, 15.0])  // خط‌چین (۱۸ پیکسل خط، ۱۲ پیکسل فاصله)
-            : StrokePattern.solid(),
-  ));
-}
-      setState(() => _routePolylines = lines);
-      _fitRouteToScreen();
-      _showSnackBar("مسیر ${_getModeName()} رسم شد!", success: true);
+      final res = await http.get(url).timeout(const Duration(seconds: 30));
+      if (res.statusCode == 200) {
+        final data = json.decode(res.body);
+        if (data['success'] == true) {
+          List<Polyline> lines = [];
+          for (var r in (data['routes'] ?? [data])) {
+            var coords = r['route_coords'] as List;
+            lines.add(Polyline(
+              points: coords.map((c) => LatLng(c[1].toDouble(), c[0].toDouble())).toList(),
+              strokeWidth: 9,
+              color: _selectedMode == "truck"
+                  ? Colors.orange
+                  : _selectedMode == "motorcycle"
+                      ? Colors.purple
+                      : _selectedMode == "bicycle"
+                          ? Colors.green
+                          : _selectedMode == "pedestrian"
+                              ? Colors.teal
+                              : Colors.blue,
+            ));
+          }
+          setState(() => _routePolylines = lines);
+          _fitRouteToScreen();
+          _showSnackBar("مسیر ${_getModeName()} رسم شد!", success: true);
+        }
+      }
+    } catch (e) {
+      _showSnackBar("اتصال ناموفق");
+    } finally {
+      setState(() => _isLoadingRoute = false);
     }
-  }
-} catch (e) {
-  _showSnackBar("اتصال ناموفق");
-} finally {
-  setState(() => _isLoadingRoute = false);
-}
   }
 
   void _openSearchFromFab() {
@@ -357,7 +343,6 @@ for (var r in (data['routes'] ?? [data])) {
   }
 
   void _openRoutingPanel() {
-    
     showGeneralDialog(
       context: context,
       barrierDismissible: true,
@@ -386,7 +371,7 @@ for (var r in (data['routes'] ?? [data])) {
           _originController.text = "موقعیت فعلی";
         }),
         onStartRouting: _startRouting,
-        //modeName: _getModeName(),
+        modeName: _getModeName(),
         onClose: () => Navigator.of(context).pop(),
         onMinimize: () {
           Navigator.pop(context); // بستن Overlay
