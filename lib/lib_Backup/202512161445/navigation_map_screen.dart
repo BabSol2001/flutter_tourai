@@ -63,9 +63,13 @@ class _NavigationMapScreenState extends State<NavigationMapScreen>
 
   bool _isSearchMinimized = false;
   bool _isRoutingPanelMinimized = false;
-  int _activeDestinationIndex = 0;
 
-  static const String baseUrl = "http://192.168.0.105:8000";//"http://192.168.178.23:8000";//"http://192.168.0.145:8000";
+  // متغیر جدید برای ذخیره موقعیت‌های بین راهی
+  List<LatLng> _waypoints = [];
+  // متغیر جدید برای ذخیره نشانگرهای بین راهی
+  List<Marker> _waypointMarkers = [];
+
+  static const String baseUrl = "http://192.168.43.158:8000";//"http://192.168.100.176:8000";//"http://192.168.178.23:8000";//"http://192.168.0.145:8000";
 
   final List<Map<String, dynamic>> transportModes = [
     {"mode": "auto", "engine": "valhalla", "name": "ماشین", "icon": Icons.directions_car},
@@ -169,32 +173,27 @@ class _NavigationMapScreenState extends State<NavigationMapScreen>
 
       setState(() {
         _isSelectingFromMap = false;
-
-        // 👈 فعلاً فقط فیلد اول (مقصد اصلی) رو پر می‌کنیم
-        // چون لیست کنترلرهای میانی در این صفحه در دسترس نیست
-        // وقتی بخوای چند نقطه داشته باشی، باید لیست کنترلرها رو از RoutingTopPanel بیرون بیاری
-        if (_activeDestinationIndex == 0) {
-          _selectedDestination = point;
-          _destinationController.text = coordsText.length > 35 
-              ? "${coordsText.substring(0, 35)}..." 
-              : coordsText;
-          _destinationMarker = Marker(
-            point: point,
-            width: 50,
-            height: 50,
-            child: const Icon(Icons.location_on, color: Colors.red, size: 50),
-          );
-        }
-        // برای فیلدهای بعدی (ایندکس > 0) فعلاً فقط مارکر می‌ذاریم
-        // بعداً وقتی لیست کنترلرها رو پاس دادیم، اینجا هم پر می‌شه
+        _selectedDestination = point;
+        _destinationController.text = coordsText.length > 35 ? "${coordsText.substring(0, 35)}..." : coordsText;
+        _destinationMarker = Marker(
+          point: point,
+          width: 50,
+          height: 50,
+          child: const Icon(Icons.location_on, color: Colors.red, size: 50),
+        );
+        _pendingSearchText = coordsText;
       });
 
       _mapController.move(point, 16);
       _showSnackBar("مختصات انتخاب شد: $coordsText", success: true);
 
-      // نیازی به باز کردن جستجو نیست، چون مستقیم انتخاب شد
+      Future.delayed(const Duration(milliseconds: 300), () {
+        _openSearchFromFab();
+        setState(() {
+          _isRoutingPanelMinimized = false;
+        });
+      });
     } else {
-      // رفتار معمولی: انتخاب مقصد بدون حالت خاص
       setState(() {
         _selectedDestination = point;
         _destinationMarker = Marker(
@@ -332,120 +331,146 @@ void _swapOriginAndDestination() {
     return transportModes.firstWhere((m) => m['mode'] == _selectedMode)['name'];
   }
 
-  Future<void> _startRouting() async {
-    // اگر مقصد انتخاب نشده، اما توی فیلد نوشته "موقعیت فعلی"، از موقعیت فعلی استفاده کن
-    if (_selectedDestination == null) {
-      final destinationText = _destinationController.text.trim();
-      if (destinationText == "موقعیت فعلی" || destinationText.isEmpty) {
+// در کلاس _NavigationMapScreenState
+
+Future<void> _startRouting() async {
+  // اگر مقصد انتخاب نشده، اما توی فیلد نوشته "موقعیت فعلی"، از موقعیت فعلی استفاده کن
+  if (_selectedDestination == null) {
+    final destinationText = _destinationController.text.trim();
+    if (destinationText == "موقعیت فعلی" || destinationText.isEmpty) {
+      if (_currentPosition == null) {
+        await _getCurrentLocation(force: true);
         if (_currentPosition == null) {
-          await _getCurrentLocation(force: true);
-          if (_currentPosition == null) {
-            _showSnackBar("موقعیت فعلی در دسترس نیست");
-            return;
-          }
+          _showSnackBar("موقعیت فعلی در دسترس نیست");
+          return;
         }
-        // مقصد = موقعیت فعلی
-        _selectedDestination = LatLng(_currentPosition!.latitude, _currentPosition!.longitude);
-        _destinationMarker = Marker(
-          point: _selectedDestination!,
-          width: 30,
-          height: 50,
-          alignment: Alignment.topCenter,
-          child: Container(
-            width: 6,
-            height: 50,
-            decoration: BoxDecoration(
-              color: Colors.brown.shade800,
-              borderRadius: BorderRadius.circular(3),
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 20,
-                  height: 15,
-                  decoration: BoxDecoration(
-                    color: Colors.red.shade600,
-                    borderRadius: BorderRadius.only(
-                      topLeft: Radius.circular(10),
-                      bottomLeft: Radius.circular(10),
-                    ),
-                  ),
-                  child: Icon(
-                    Icons.flag,
-                    color: Colors.white,
-                    size: 12,
-                  ),
-                ),
-                SizedBox(height: 2),
-                Expanded(child: SizedBox()),
-              ],
-            ),
+      }
+      // مقصد = موقعیت فعلی
+      _selectedDestination = LatLng(_currentPosition!.latitude, _currentPosition!.longitude);
+      
+      // توجه: نیازی به تعریف مارکر در اینجا نیست، چون در بخش اصلی تعریف می‌شود.
+      // اما برای اطمینان از بروزرسانی وضعیت:
+      setState(() {
+        _destinationController.text = "موقعیت فعلی"; // اطمینان از نمایش متن درست
+      }); 
+    } else {
+      _showSnackBar("مقصد را انتخاب کنید");
+      return;
+    }
+  }
+
+  // 1. تنظیم وضعیت بارگذاری و پاکسازی مسیرهای قبلی
+  setState(() => _isLoadingRoute = true);
+  _routePolylines.clear();
+  _waypointMarkers.clear(); // پاک کردن نشانگرهای بین راهی قبلی
+
+  // 2. اطمینان از در دسترس بودن موقعیت شروع
+  if (_currentPosition == null) await _getCurrentLocation(force: true);
+
+  final startLat = _originLatLng?.latitude ?? _currentPosition!.latitude;
+  final startLon = _originLatLng?.longitude ?? _currentPosition!.longitude;
+  final startPoint = LatLng(startLat, startLon);
+
+  // 3. 👇 تعریف نهایی نشانگرهای A و B با استفاده از RouteMarker
+  setState(() {
+    _tempSearchMarker = null; // پاک کردن نشانگر موقت جستجو
+
+    // نشانگر مبدا (Start Point): دایره قرمز با A
+    _currentLocationMarker = Marker(
+      point: startPoint,
+      width: 30,
+      height: 30,
+      // 👈 استفاده از RouteMarker
+      child: const RouteMarker(letter: 'A', color: Colors.red),
+    );
+
+    // ساخت نشانگرهای مقاصد بین راهی (1, 2, 3...)
+    for (int i = 0; i < _waypoints.length; i++) {
+        _waypointMarkers.add(
+          Marker(
+            point: _waypoints[i],
+            width: 30,
+            height: 30,
+            // 👈 استفاده از WaypointMarker جدید
+            child: WaypointMarker(number: i + 1),
           ),
         );
-        setState(() {}); // برای بروزرسانی مارکر
-      } else {
-        _showSnackBar("مقصد را انتخاب کنید");
-        return;
+    }
+
+    // نشانگر مقصد (Destination Point): دایره سبز با B
+    _destinationMarker = Marker(
+      point: _selectedDestination!,
+      width: 30,
+      height: 30,
+      // 👈 استفاده از RouteMarker
+      child: const RouteMarker(letter: 'B', color: Colors.green),
+    );
+  });
+  // 👆 پایان تعریف نشانگرها
+  
+// 4. ساخت رشته مختصات برای URL (شامل Waypoints)
+  // Waypoints مختصات‌های بین راهی را با فرمت "lon1,lat1;lon2,lat2;..." در URL اضافه می‌کنند.
+  String waypointsParam = '';
+  if (_waypoints.isNotEmpty) {
+      waypointsParam = 
+          '&waypoints=${_waypoints.map((wp) => '${wp.longitude},${wp.latitude}').join(';')}' + 
+          ';'; // اضافه کردن سمی‌کالن نهایی برای اطمینان از فرمت صحیح
+
+      // توجه: برخی APIها ممکن است Waypoints را داخل پارامترهای start_lat/lon و end_lat/lon نخواهند.
+      // اگر API شما Waypoints را قبول نمی‌کند، باید این بخش را اصلاح کنید.
+      // فرض بر این است که API مختصات Waypoint را در پارامتر جداگانه می‌گیرد.
+  }
+  
+  // 5. فراخوانی API با Waypoints جدید
+
+  final url = Uri.parse(
+      '$baseUrl/api/v1/osm/smart-route/?start_lat=$startLat&start_lon=$startLon$waypointsParam&end_lat=${_selectedDestination!.latitude}&end_lon=${_selectedDestination!.longitude}&engine=$_selectedEngine&mode=$_selectedMode');
+
+  try {
+    final res = await http.get(url).timeout(const Duration(seconds: 30));
+    if (res.statusCode == 200) {
+      final data = json.decode(res.body);
+      if (data['success'] == true) {
+        List<Polyline> lines = [];
+
+        for (var r in (data['routes'] ?? [data])) {
+          var coords = r['route_coords'] as List;
+
+          final bool isBicycle = _selectedMode == "bicycle";
+          final bool isMotorcycle = _selectedMode == "motorcycle";
+          final bool isPedestrian = _selectedMode == "pedestrian";
+
+          lines.add(Polyline(
+            points: coords.map((c) => LatLng(c[1].toDouble(), c[0].toDouble())).toList(),
+            strokeWidth: (isBicycle || isMotorcycle || isPedestrian) ? 10.0 : 15.0,
+            color: isMotorcycle
+                ? Colors.purple.shade600
+                : isBicycle
+                    ? Colors.green.shade700
+                    : isPedestrian
+                        ? Colors.teal.shade700
+                        : _selectedMode == "truck"
+                            ? Colors.orange
+                            : Colors.blue,
+            // خط‌چین و نقطه‌چین واقعی در نسخه 8.2.2
+            pattern: isPedestrian
+                ? const StrokePattern.dotted(spacingFactor: 1.3) // نقطه‌چین فاصله‌دار (۴ پیکسل نقطه، ۲۸ پیکسل فاصله)
+                : (isBicycle || isMotorcycle)
+                    ? StrokePattern.dashed(segments: const [7.0, 15.0]) // خط‌چین (۱۸ پیکسل خط، ۱۲ پیکسل فاصله)
+                    : StrokePattern.solid(),
+          ));
+        }
+        setState(() => _routePolylines = lines);
+        _fitRouteToScreen();
+        _showSnackBar("مسیر ${_getModeName()} رسم شد!", success: true);
       }
     }
-    setState(() => _isLoadingRoute = true);
-    _routePolylines.clear();
-
-    if (_currentPosition == null) await _getCurrentLocation(force: true);
-
-    final startLat = _originLatLng?.latitude ?? _currentPosition!.latitude;
-    final startLon = _originLatLng?.longitude ?? _currentPosition!.longitude;
-
-    final url = Uri.parse(
-        '$baseUrl/api/v1/osm/smart-route/?start_lat=$startLat&start_lon=$startLon&end_lat=${_selectedDestination!.latitude}&end_lon=${_selectedDestination!.longitude}&engine=$_selectedEngine&mode=$_selectedMode');
-
-    try {
-  final res = await http.get(url).timeout(const Duration(seconds: 30));
-  if (res.statusCode == 200) {
-    final data = json.decode(res.body);
-    if (data['success'] == true) {
-      List<Polyline> lines = [];
-
-for (var r in (data['routes'] ?? [data])) {
-  var coords = r['route_coords'] as List;
-
-  final bool isBicycle = _selectedMode == "bicycle";
-  final bool isMotorcycle = _selectedMode == "motorcycle";
-  final bool isPedestrian = _selectedMode == "pedestrian";
-
-  lines.add(Polyline(
-    points: coords.map((c) => LatLng(c[1].toDouble(), c[0].toDouble())).toList(),
-    strokeWidth: (isBicycle || isMotorcycle || isPedestrian) ? 10.0 : 15.0,
-    color: isMotorcycle
-        ? Colors.purple.shade600
-        : isBicycle
-            ? Colors.green.shade700
-            : isPedestrian
-                ? Colors.teal.shade700
-                : _selectedMode == "truck"
-                    ? Colors.orange
-                    : Colors.blue,
-    // خط‌چین و نقطه‌چین واقعی در نسخه 8.2.2
-    pattern: isPedestrian
-        ? const StrokePattern.dotted(spacingFactor: 1.3)  // نقطه‌چین فاصله‌دار (۴ پیکسل نقطه، ۲۸ پیکسل فاصله)
-        : (isBicycle || isMotorcycle)
-            ? StrokePattern.dashed(segments: const [7.0, 15.0])  // خط‌چین (۱۸ پیکسل خط، ۱۲ پیکسل فاصله)
-            : StrokePattern.solid(),
-  ));
-}
-      setState(() => _routePolylines = lines);
-      _fitRouteToScreen();
-      _showSnackBar("مسیر ${_getModeName()} رسم شد!", success: true);
-    }
+  } catch (e) {
+    _showSnackBar("اتصال ناموفق");
+  } finally {
+    setState(() => _isLoadingRoute = false);
   }
-} catch (e) {
-  _showSnackBar("اتصال ناموفق");
-} finally {
-  setState(() => _isLoadingRoute = false);
 }
-  }
-
   void _openSearchFromFab() {
     // مهم: اول وضعیت مینیمایز رو ریست کن
     setState(() {
@@ -486,9 +511,18 @@ for (var r in (data['routes'] ?? [data])) {
       });
     });
   }
-    void _enableMapSelectionMode() {
-    setState(() => _isSelectingFromMap = true);
-    Navigator.of(context).pop();
+  void _enableMapSelectionMode() {
+    setState(() {
+      _isSelectingFromMap = true;
+      
+      // 👈 اگر پنل مسیریابی باز است، آن را مینیمایز کن
+      if (ModalRoute.of(context)?.settings.name == "routing_panel") {
+        _isRoutingPanelMinimized = true;
+      }
+      
+      // 👈 مطمئن شو که پنل جستجو بسته می‌شود
+      Navigator.of(context).pop();
+    });
     _showSnackBar("روی نقشه ضربه بزنید تا مقصد انتخاب شود", success: true);
   }
 
@@ -524,21 +558,16 @@ for (var r in (data['routes'] ?? [data])) {
         onStartRouting: _startRouting,
         //modeName: _getModeName(),
         onClose: () => Navigator.of(context).pop(),
+        onAddWaypoint: _addWaypoint,
+        waypointsLength: _waypoints.length, // ← این خط رو اضافه کن
         onMinimize: () {
           Navigator.pop(context); // بستن Overlay
           setState(() {
             _isRoutingPanelMinimized = true; // تنظیم وضعیت مینیمایز
           });
-        },
-        // 👈 اضافه کن این کال‌بک جدید
-        onPickFromMap: (int index) {
-          setState(() {
-            _activeDestinationIndex = index;
-            _isSelectingFromMap = true;
-            _isRoutingPanelMinimized = true; // چون قبلاً مینیمایز شده
-          });
-          _showSnackBar("روی نقشه تپ کنید تا نقطه انتخاب شود", success: true);
-        },
+        }
+
+        
       ),
       transitionBuilder: (_, animation, __, child) {
         return SlideTransition(
@@ -662,6 +691,7 @@ for (var r in (data['routes'] ?? [data])) {
                 if (_currentLocationMarker != null) _currentLocationMarker!,
                 if (_destinationMarker != null) _destinationMarker!,
                 if (_tempSearchMarker != null) _tempSearchMarker!,
+                ..._waypointMarkers,
               ]),
             ],
           ),
@@ -739,6 +769,30 @@ for (var r in (data['routes'] ?? [data])) {
       ),
     );
   }
+
+  // در کلاس _NavigationMapScreenState، در کنار سایر توابع:
+
+  /// افزودن مقصد فعلی به عنوان مقصد بین راهی
+  void _addWaypoint() {
+    if (_selectedDestination == null) {
+      _showSnackBar("لطفا ابتدا یک مقصد نهایی را انتخاب کنید.");
+      return;
+    }
+
+    // 1. موقعیت مقصد نهایی را به عنوان مقصد بین راهی ذخیره کن
+    setState(() {
+      _waypoints.add(_selectedDestination!);
+      
+      // 2. مقصد نهایی را پاک کن تا فیلد مقصد برای مقصد بعدی آزاد شود
+      _selectedDestination = null;
+      _destinationController.clear();
+      _destinationMarker = null; // پاک کردن نشانگر مقصد قبلی
+
+      // 3. نمایش پیام
+      _showSnackBar("مقصد بین راهی شماره ${_waypoints.length} اضافه شد.");
+    });
+  }
+
 }
 
 /* --------------------------------------------------------------

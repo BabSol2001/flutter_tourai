@@ -5,7 +5,7 @@ import 'package:geolocator/geolocator.dart';
 import 'transport_mode_selector.dart';
 import 'search_field.dart';
 
-class RoutingTopPanel extends StatefulWidget {
+class RoutingTopPanel extends StatelessWidget {
   final TextEditingController originController;
   final TextEditingController destinationController;
   final LatLng? selectedDestination;
@@ -19,8 +19,6 @@ class RoutingTopPanel extends StatefulWidget {
   final VoidCallback onStartRouting;
   final VoidCallback onClose;
   final VoidCallback onMinimize;
-  final Function(int) onPickFromMap; // ← این رو داشتی، نگه داشتم
-  
 
   const RoutingTopPanel({
     Key? key,
@@ -37,101 +35,9 @@ class RoutingTopPanel extends StatefulWidget {
     required this.onStartRouting,
     required this.onClose,
     required this.onMinimize,
-    required this.onPickFromMap, // ← اضافه شد به constructor
   }) : super(key: key);
 
-  @override
-  State<RoutingTopPanel> createState() => _RoutingTopPanelState();
-}
-
-class _RoutingTopPanelState extends State<RoutingTopPanel> {
-  List<TextEditingController> destinationControllers = [];
-
-  int _activeDestinationIndex = 0;
-
-  @override
-  void initState() {
-    super.initState();
-    destinationControllers.add(widget.destinationController);
-  }
-
-  List<Widget> _buildDestinationFields() {
-    List<Widget> fields = [];
-
-    for (int i = 0; i < destinationControllers.length; i++) {
-      final controller = destinationControllers[i];
-      final isFirst = i == 0;
-      final hint = isFirst ? "مقصد" : "نقطه بعدی ${i}";
-
-      fields.add(
-        TextField(
-          controller: controller,
-          readOnly: true,
-          decoration: InputDecoration(
-            hintText: hint,
-            filled: true,
-            fillColor: Colors.grey[100],
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide.none,
-            ),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-            prefixIcon: GestureDetector(
-              onTap: () {
-                // ۱. مینیمایز کردن پنل
-                widget.onMinimize();
-                // ۲. ذخیره ایندکس فیلد فعال
-                _activeDestinationIndex = i;
-                // ۳. اطلاع دادن به صفحه اصلی برای فعال کردن حالت انتخاب از نقشه
-                widget.onPickFromMap(i);
-              },
-              child: const Padding(
-                padding: EdgeInsets.all(12.0),
-                child: Icon(Icons.location_on, color: Colors.red, size: 26),
-              ),
-            ),
-            suffixIcon: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                IconButton(
-                  icon: const Icon(Icons.clear),
-                  onPressed: () {
-                    controller.clear();
-                    if (destinationControllers.length > 1) {
-                      setState(() {
-                        destinationControllers.removeAt(i);
-                      });
-                    } else {
-                      widget.onClearDestination();
-                    }
-                  },
-                ),
-                if (i == destinationControllers.length - 1)
-                  IconButton(
-                    icon: const Icon(Icons.add_circle_outline, color: Colors.blue),
-                    tooltip: "افزودن نقطه بعدی",
-                    onPressed: () {
-                      setState(() {
-                        destinationControllers.add(TextEditingController());
-                      });
-                    },
-                  ),
-              ],
-            ),
-          ),
-          onTap: () {
-            // بعداً برای جستجوی متنی
-          },
-        ),
-      );
-      if (i < destinationControllers.length - 1) {
-        fields.add(const SizedBox(height: 12));
-      }
-    }
-
-    return fields;
-  }
-
+  // تابع داخلی برای تبدیل mode به نام فارسی
   String _getDisplayName(String mode) {
     switch (mode) {
       case "auto":
@@ -174,18 +80,19 @@ class _RoutingTopPanelState extends State<RoutingTopPanel> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  // دکمه‌های بالا - سمت چپ
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Row(
                         children: [
                           IconButton(
-                            onPressed: widget.onMinimize,
+                            onPressed: onMinimize,
                             icon: const Icon(Icons.minimize, color: Colors.grey, size: 28),
                             tooltip: "مینیمایز",
                           ),
                           IconButton(
-                            onPressed: widget.onClose,
+                            onPressed: onClose,
                             icon: const Icon(Icons.close, color: Colors.grey, size: 28),
                             tooltip: "بستن",
                           ),
@@ -207,11 +114,12 @@ class _RoutingTopPanelState extends State<RoutingTopPanel> {
                   const Text("مسیریابی هوشمند", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 20),
 
+                  // فیلد مبدأ - با آیکون موقعیت فعلی قابل کلیک
                   TextField(
-                    controller: widget.originController,
+                    controller: originController,
                     onTap: () {
-                      if (widget.originController.text == "موقعیت فعلی") {
-                        widget.originController.clear();
+                      if (originController.text == "موقعیت فعلی") {
+                        originController.clear();
                       }
                     },
                     decoration: InputDecoration(
@@ -229,11 +137,14 @@ class _RoutingTopPanelState extends State<RoutingTopPanel> {
                             Position position = await Geolocator.getCurrentPosition(
                               desiredAccuracy: LocationAccuracy.high,
                             );
+
                             final lat = position.latitude.toStringAsFixed(6);
                             final lng = position.longitude.toStringAsFixed(6);
                             final coords = "$lat, $lng";
-                            widget.originController.text = coords;
-                            widget.onClearOrigin();
+
+                            originController.text = coords;
+                            onClearOrigin(); // چون الان مبدأ = موقعیت فعلی هست
+
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(
                                 content: const Text("مبدا: موقعیت فعلی شما"),
@@ -256,10 +167,10 @@ class _RoutingTopPanelState extends State<RoutingTopPanel> {
                           child: Icon(Icons.my_location, color: Colors.blue, size: 26),
                         ),
                       ),
-                      suffixIcon: widget.originLatLng != null
+                      suffixIcon: originLatLng != null
                           ? IconButton(
                               icon: const Icon(Icons.clear),
-                              onPressed: widget.onClearOrigin,
+                              onPressed: onClearOrigin,
                             )
                           : null,
                     ),
@@ -267,50 +178,63 @@ class _RoutingTopPanelState extends State<RoutingTopPanel> {
                   ),
                   const SizedBox(height: 12),
 
-                  ..._buildDestinationFields(),
-
+                  // فیلد مقصد
+                  SearchField(
+                    controller: destinationController,
+                    hintText: "مقصد",
+                    isLoading: false,
+                    onClear: selectedDestination != null ? onClearDestination : null,
+                    fillColor: Colors.grey[100]!,
+                    prefixIcon: Icons.location_on,
+                    prefixIconColor: Colors.red,
+                    onSubmitted: (_) {},
+                  ),
                   const SizedBox(height: 16),
 
+                  // دکمه جابجایی
                   Center(
                     child: IconButton(
-                      onPressed: widget.selectedDestination != null ? widget.onSwap : null,
+                      onPressed: selectedDestination != null ? onSwap : null,
                       icon: Icon(
                         Icons.swap_vert,
                         size: 36,
-                        color: widget.selectedDestination != null ? Colors.blue : Colors.grey,
+                        color: selectedDestination != null ? Colors.blue : Colors.grey,
                       ),
                     ),
                   ),
                   const SizedBox(height: 20),
 
+                  // انتخاب نوع وسیله نقلیه
                   ValueListenableBuilder<String>(
-                    valueListenable: widget.modeNotifier,
+                    valueListenable: modeNotifier,
                     builder: (context, mode, _) {
                       return TransportModeSelector(
                         selectedMode: mode,
                         onModeSelected: (newMode) {
-                          widget.modeNotifier.value = newMode;
-                          widget.onModeChanged(newMode);
+                          modeNotifier.value = newMode;
+                          onModeChanged(newMode);
                         },
                       );
                     },
                   ),
                   const SizedBox(height: 24),
 
+                  // دکمه شروع مسیریابی — متنش همیشه با تغییر حالت آپدیت میشه
                   ValueListenableBuilder<String>(
-                    valueListenable: widget.modeNotifier,
+                    valueListenable: modeNotifier,
                     builder: (context, currentMode, _) {
                       final String displayName = _getDisplayName(currentMode);
+
                       return SizedBox(
                         width: double.infinity,
                         child: ElevatedButton.icon(
-                          onPressed: widget.selectedDestination == null || widget.isLoadingRoute
+                          onPressed: selectedDestination == null || isLoadingRoute
                               ? null
                               : () {
-                                  widget.onStartRouting();
-                                  widget.onMinimize();
+                                  onStartRouting();
+                                  onMinimize();
                                 },
-                          icon: widget.isLoadingRoute
+                          icon: isLoadingRoute
                               ? const SizedBox(
                                   width: 20,
                                   height: 20,
@@ -318,7 +242,7 @@ class _RoutingTopPanelState extends State<RoutingTopPanel> {
                                 )
                               : const Icon(Icons.directions),
                           label: Text(
-                            widget.isLoadingRoute ? "در حال رسم مسیر..." : "شروع مسیریابی با $displayName",
+                            isLoadingRoute ? "در حال رسم مسیر..." : "شروع مسیریابی با $displayName",
                           ),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.blue,

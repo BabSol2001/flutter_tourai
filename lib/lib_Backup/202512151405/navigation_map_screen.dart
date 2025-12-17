@@ -63,9 +63,8 @@ class _NavigationMapScreenState extends State<NavigationMapScreen>
 
   bool _isSearchMinimized = false;
   bool _isRoutingPanelMinimized = false;
-  int _activeDestinationIndex = 0;
 
-  static const String baseUrl = "http://192.168.0.105:8000";//"http://192.168.178.23:8000";//"http://192.168.0.145:8000";
+  static const String baseUrl = "http://192.168.2.108:8000";//"http://192.168.178.23:8000";//"http://192.168.0.145:8000";
 
   final List<Map<String, dynamic>> transportModes = [
     {"mode": "auto", "engine": "valhalla", "name": "ماشین", "icon": Icons.directions_car},
@@ -169,32 +168,24 @@ class _NavigationMapScreenState extends State<NavigationMapScreen>
 
       setState(() {
         _isSelectingFromMap = false;
-
-        // 👈 فعلاً فقط فیلد اول (مقصد اصلی) رو پر می‌کنیم
-        // چون لیست کنترلرهای میانی در این صفحه در دسترس نیست
-        // وقتی بخوای چند نقطه داشته باشی، باید لیست کنترلرها رو از RoutingTopPanel بیرون بیاری
-        if (_activeDestinationIndex == 0) {
-          _selectedDestination = point;
-          _destinationController.text = coordsText.length > 35 
-              ? "${coordsText.substring(0, 35)}..." 
-              : coordsText;
-          _destinationMarker = Marker(
-            point: point,
-            width: 50,
-            height: 50,
-            child: const Icon(Icons.location_on, color: Colors.red, size: 50),
-          );
-        }
-        // برای فیلدهای بعدی (ایندکس > 0) فعلاً فقط مارکر می‌ذاریم
-        // بعداً وقتی لیست کنترلرها رو پاس دادیم، اینجا هم پر می‌شه
+        _selectedDestination = point;
+        _destinationController.text = coordsText.length > 35 ? "${coordsText.substring(0, 35)}..." : coordsText;
+        _destinationMarker = Marker(
+          point: point,
+          width: 50,
+          height: 50,
+          child: const Icon(Icons.location_on, color: Colors.red, size: 50),
+        );
+        _pendingSearchText = coordsText;
       });
 
       _mapController.move(point, 16);
       _showSnackBar("مختصات انتخاب شد: $coordsText", success: true);
 
-      // نیازی به باز کردن جستجو نیست، چون مستقیم انتخاب شد
+      Future.delayed(const Duration(milliseconds: 300), () {
+        _openSearchFromFab();
+      });
     } else {
-      // رفتار معمولی: انتخاب مقصد بدون حالت خاص
       setState(() {
         _selectedDestination = point;
         _destinationMarker = Marker(
@@ -529,16 +520,7 @@ for (var r in (data['routes'] ?? [data])) {
           setState(() {
             _isRoutingPanelMinimized = true; // تنظیم وضعیت مینیمایز
           });
-        },
-        // 👈 اضافه کن این کال‌بک جدید
-        onPickFromMap: (int index) {
-          setState(() {
-            _activeDestinationIndex = index;
-            _isSelectingFromMap = true;
-            _isRoutingPanelMinimized = true; // چون قبلاً مینیمایز شده
-          });
-          _showSnackBar("روی نقشه تپ کنید تا نقطه انتخاب شود", success: true);
-        },
+        }
       ),
       transitionBuilder: (_, animation, __, child) {
         return SlideTransition(
