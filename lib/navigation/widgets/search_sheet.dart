@@ -19,11 +19,11 @@ class SearchSheet extends StatefulWidget {
   final VoidCallback onOpenRoutingPanel;
   final VoidCallback onMinimize;
   final VoidCallback onClose;
-  final LatLng? selectedDestination; // اختیاری شد
-  final String selectedMode; // اختیاری شد با پیش‌فرض
-  final ValueNotifier<String> modeNotifier; // اختیاری شد
-  final TextEditingController? destinationController; // اختیاری شد
-  final VoidCallback onShowSnackBar; // اختیاری شد
+  final LatLng? selectedDestination; // اختیاری
+  final String selectedMode; // اختیاری با پیش‌فرض
+  final ValueNotifier<String> modeNotifier; // اختیاری
+  final TextEditingController? destinationController; // اختیاری
+  final VoidCallback onShowSnackBar; // اختیاری
   final SearchHistoryManager historyManager;
 
   const SearchSheet({

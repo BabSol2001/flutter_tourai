@@ -27,7 +27,7 @@ class RoutingTopPanel extends StatefulWidget {
     Key? key,
     required this.originController,
     required this.destinationController,
-    required this.selectedDestination,
+    this.selectedDestination,
     required this.originLatLng,
     required this.isLoadingRoute,
     required this.modeNotifier,
@@ -92,7 +92,7 @@ void initState() {
             prefixIcon: GestureDetector(
               onTap: () {
                 // ۱. مینیمایز کردن پنل
-                widget.onMinimize();
+                //widget.onMinimize();
                 // ۲. ذخیره ایندکس فیلد فعال
                 _activeDestinationIndex = i;
                 // ۳. اطلاع دادن به صفحه اصلی برای فعال کردن حالت انتخاب از نقشه
