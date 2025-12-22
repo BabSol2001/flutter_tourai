@@ -51,7 +51,6 @@ class _NavigationMapScreenState extends State<NavigationMapScreen>
   String _selectedMode = "auto";
 
   final ValueNotifier<String> _modeNotifier = ValueNotifier<String>("auto");
-  final ValueNotifier<String> _profileNotifier = ValueNotifier<String>("fastest"); // ← این خط جدید
 
   final TextEditingController _searchController = TextEditingController();
   bool _isSearchingPoint = false;
@@ -256,7 +255,6 @@ class _NavigationMapScreenState extends State<NavigationMapScreen>
 
   Future<void> _startRouting() async {
     List<LatLng> waypoints = [];
-    final ValueNotifier<String> _profileNotifier = ValueNotifier<String>("fastest");
 
     LatLng? origin;
     if (_originLatLng != null) {
@@ -293,9 +291,9 @@ class _NavigationMapScreenState extends State<NavigationMapScreen>
     }
 
     setState(() => _isLoadingRoute = true);
-    final profile = _profileNotifier.value;
+    
     final coordsList = waypoints.map((p) => "${p.longitude},${p.latitude}").join('|');
-    final url = Uri.parse('$baseUrl/api/v1/osm/smart-route/?coords=$coordsList&engine=$_selectedEngine&mode=$_selectedMode&profile=$profile');
+    final url = Uri.parse('$baseUrl/api/v1/osm/smart-route/?coords=$coordsList&engine=$_selectedEngine&mode=$_selectedMode');
 
     try {
       final res = await http.get(url).timeout(const Duration(seconds: 40));
@@ -449,9 +447,6 @@ class _NavigationMapScreenState extends State<NavigationMapScreen>
         onMinimize: () {
           Navigator.pop(context);
           setState(() => _isRoutingPanelMinimized = true);
-        },
-        onProfileChanged: (newProfile) {
-          _profileNotifier.value = newProfile;
         },
         onPickFromMap: (int index) {
           setState(() {

@@ -22,7 +22,6 @@ class RoutingTopPanel extends StatefulWidget {
   final Function(int) onPickFromMap; // ← این رو داشتی، نگه داشتم
   final Function(List<TextEditingController>) onProvideControllers;
   final List<TextEditingController> initialControllers;
-  final Function(String profile) onProfileChanged; // ← جدید
 
   const RoutingTopPanel({
     Key? key,
@@ -42,7 +41,6 @@ class RoutingTopPanel extends StatefulWidget {
     required this.onPickFromMap, // ← اضافه شد به constructor
     required this.onProvideControllers,
     required this.initialControllers,
-    required this.onProfileChanged,
   }) : super(key: key);
 
   @override
@@ -51,7 +49,6 @@ class RoutingTopPanel extends StatefulWidget {
 
 class _RoutingTopPanelState extends State<RoutingTopPanel> {
   List<TextEditingController> destinationControllers = [];
-  String _selectedProfile = "fastest"; // پیش‌فرض
 
   int _activeDestinationIndex = 0;
 
@@ -305,19 +302,7 @@ void initState() {
                         onModeSelected: (newMode) {
                           widget.modeNotifier.value = newMode;
                           widget.onModeChanged(newMode);
-                          setState(() {
-                            _selectedProfile = "fastest"; // ریست پروفایل وقتی mode عوض می‌شه
-                            widget.onProfileChanged(_selectedProfile); // منتقل به صفحه اصلی
-                          });
                         },
-
-                        onProfileSelected: (newProfile) {
-                          setState(() {
-                            _selectedProfile = newProfile;
-                          });
-                          widget.onProfileChanged(newProfile); // منتقل به صفحه اصلی
-                        },
-
                       );
                     },
                   ),
