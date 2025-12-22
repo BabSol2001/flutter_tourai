@@ -301,14 +301,33 @@ class _NavigationMapScreenState extends State<NavigationMapScreen>
         final data = json.decode(res.body);
         if (data['success'] == true) {
           List<Polyline> lines = [];
-          for (var r in (data['routes'] ?? [data])) {
-            var coords = r['route_coords'] as List;
-            lines.add(Polyline(
-              points: coords.map((c) => LatLng(c[0].toDouble(), c[1].toDouble())).toList(),
-              strokeWidth: 12.0,
-              color: Colors.blue,
-            ));
-          }
+            final routes = data['routes'] as List;
+
+            for (int i = 0; i < routes.length; i++) {
+              var r = routes[i];
+              var coords = r['route_coords'] as List;
+              final points = coords.map((c) => LatLng(c[0].toDouble(), c[1].toDouble())).toList();
+
+              Color routeColor;
+              double width;
+              if (i == 0) {
+                // مسیر اصلی — پررنگ‌تر
+                routeColor = Colors.blue.shade700;
+                width = 10.0;
+              } else if (i == 1) {
+                routeColor = Colors.green.shade600;
+                width = 8.0;
+              } else {
+                routeColor = Colors.orange.shade600;
+                width = 8.0;
+              }
+
+              lines.add(Polyline(
+                points: points,
+                strokeWidth: width,
+                color: routeColor.withOpacity(0.8),
+              ));
+            }
           
           // ایجاد مارکرها برای نقاط مسیر
           List<Marker> markers = waypoints.asMap().entries.map((entry) {
@@ -523,8 +542,8 @@ class _NavigationMapScreenState extends State<NavigationMapScreen>
             ),
             children: [
               TileLayer(
-                urlTemplate: "https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png",
-                subdomains: const ['a', 'b'],
+                urlTemplate: "https://{s}.tile.openstreetmap.de/{z}/{x}/{y}.png",
+                subdomains: const ['a', 'b', 'c'],
               ),
               PolylineLayer(polylines: _routePolylines),
               MarkerLayer(markers: [
