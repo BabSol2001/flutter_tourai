@@ -333,89 +333,12 @@ class _NavigationMapScreenState extends State<NavigationMapScreen>
           
           // ایجاد مارکرها برای نقاط مسیر
           List<Marker> markers = waypoints.asMap().entries.map((entry) {
-            
             int idx = entry.key;
             LatLng p = entry.value;
-
-              // آیکون مبدا (idx == 0) بر اساس حالت حمل‌ونقل
-            if (idx == 0) { // فقط مبدا
-              IconData originIcon;
-              switch (_selectedMode) {
-                case "auto":
-                  originIcon = Icons.directions_car;
-                  break;
-                case "motorcycle":
-                  originIcon = Icons.motorcycle;
-                  break;
-                case "truck":
-                  originIcon = Icons.local_shipping;
-                  break;
-                case "bicycle":
-                  originIcon = Icons.directions_bike;
-                  break;
-                case "pedestrian":
-                default:
-                  originIcon = Icons.directions_walk;
-                  break;
-              }
-
-              return Marker(
-                point: p,
-                width: 40,   // اندازه کل دایره (کمی بزرگ‌تر از پین مقصد)
-                height: 40,
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: Colors.green.shade600,           // پس‌زمینه سبز
-                    shape: BoxShape.circle,
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.3),
-                        blurRadius: 6,
-                        offset: const Offset(0, 3),
-                      ),
-                    ],
-                  ),
-                  child: Center(
-                    child: Icon(
-                      originIcon,
-                      color: Colors.white,     // آیکون سفید روی سبز
-                      size: 30,                // اندازه آیکون داخل دایره
-                    ),
-                  ),
-                ),
-              );
-            }
-
-            // مقصدها (ایندکس 1 به بعد) — دایره قرمز با شماره
-            int destinationNumber = idx; // 1, 2, 3, ...
-
             return Marker(
               point: p,
-              width: 40,
-              height: 40,
-              child: Container(
-                decoration: BoxDecoration(
-                  color: Colors.red.shade600,
-                  shape: BoxShape.circle,
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.3),
-                      blurRadius: 6,
-                      offset: const Offset(0, 3),
-                    ),
-                  ],
-                ),
-                child: Center(
-                  child: Text(
-                    destinationNumber.toString(),
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ),
+              width: 40, height: 40,
+              child: Icon(Icons.location_on, color: idx == 0 ? Colors.green : Colors.red, size: 40),
             );
           }).toList();
 
@@ -596,7 +519,7 @@ class _NavigationMapScreenState extends State<NavigationMapScreen>
             _tempSearchMarker = Marker(
               point: point,
               width: 50, height: 50,
-              child: const Icon(Icons.location_pin, color: Colors.purple, size: 30),
+              child: const Icon(Icons.location_searching, color: Colors.purple, size: 50),
             );
           });
           _mapController.move(point, 16);
@@ -645,7 +568,7 @@ class _NavigationMapScreenState extends State<NavigationMapScreen>
               children: [
                 FloatingActionButton(
                   heroTag: "fab_search",
-                  backgroundColor: (_isSearchMinimized || _isRoutingPanelMinimized) ? (_isSearchMinimized ? Colors.blue : Colors.green) : Colors.white,
+                  backgroundColor: (_isSearchMinimized || _isRoutingPanelMinimized) ? Colors.blue : Colors.white,
                   onPressed: () {
                     if (_isRoutingPanelMinimized) _openRoutingPanel();
                     else _openSearchFromFab();
