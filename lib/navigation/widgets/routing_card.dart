@@ -249,24 +249,29 @@ class _RoutingTopPanelState extends State<RoutingTopPanel> {
                           Row(
                             children: [
                               IconButton(
-                                onPressed: widget.onMinimize,
-                                icon: const Icon(Icons.minimize, color: Colors.grey, size: 28),
-                                tooltip: "مینیمایز",
-                              ),
-                              IconButton(
                                 onPressed: widget.onClose,
                                 icon: const Icon(Icons.close, color: Colors.grey, size: 28),
                                 tooltip: "بستن",
                               ),
+                              IconButton(
+                                onPressed: widget.onMinimize,
+                                icon: const Icon(Icons.minimize, color: Colors.grey, size: 28),
+                                tooltip: "مینیمایز",
+                              ),
+                              
                             ],
                           ),
                           const Opacity(opacity: 0, child: Icon(Icons.close)),
                         ],
                       ),
-
-                      const SizedBox(height: 10),
-                      const Text("مسیریابی هوشمند", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-                      const SizedBox(height: 10),
+                      
+                      Container(
+                        alignment: Alignment.center,
+                        child: const Text(
+                          "مسیریابی هوشمند",
+                          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                        ),
+                      ),
 
                       TextField(
                         controller: widget.originController,
@@ -314,7 +319,7 @@ class _RoutingTopPanelState extends State<RoutingTopPanel> {
                               }
                             },
                             child: const Padding(
-                              padding: EdgeInsets.all(12.0),
+                              padding: EdgeInsets.all(10.0),
                               child: Icon(Icons.my_location, color: Colors.blue, size: 20),
                             ),
                           ),
@@ -383,8 +388,8 @@ class _RoutingTopPanelState extends State<RoutingTopPanel> {
                                     },
                               icon: widget.isLoadingRoute
                                   ? const SizedBox(
-                                      width: 20,
-                                      height: 20,
+                                      width: 15,
+                                      height: 10,
                                       child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
                                     )
                                   : const Icon(Icons.directions),
@@ -401,7 +406,7 @@ class _RoutingTopPanelState extends State<RoutingTopPanel> {
                         },
                       ),
 
-                      const SizedBox(height: 20),
+                      const SizedBox(height: 5),
                     ],
                   ),
                 ),

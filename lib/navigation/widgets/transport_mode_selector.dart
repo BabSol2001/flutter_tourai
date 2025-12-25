@@ -30,7 +30,7 @@ class _TransportModeSelectorState extends State<TransportModeSelector> {
   @override
   Widget build(BuildContext context) {
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         // سلکتور حالت حمل‌ونقل (قبلی)
         Row(
@@ -48,12 +48,12 @@ class _TransportModeSelectorState extends State<TransportModeSelector> {
               },
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 250),
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.all(15),
                 decoration: BoxDecoration(
                   color: isSelected ? Colors.blue : Colors.grey[200],
                   shape: BoxShape.circle,
                   boxShadow: isSelected
-                      ? [BoxShadow(color: Colors.blue.withOpacity(0.4), blurRadius: 12, offset: const Offset(0, 4))]
+                      ? [BoxShadow(color: Colors.blue.withOpacity(0.4), blurRadius: 10, offset: const Offset(0, 4))]
                       : null,
                 ),
                 child: Icon(
@@ -94,16 +94,17 @@ class _TransportModeSelectorState extends State<TransportModeSelector> {
     if (profiles.isEmpty) return const SizedBox.shrink();
 
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.center,
+      mainAxisAlignment: MainAxisAlignment.center,
       children: [
         const Text(
-          "نوع مسیریابی:",
+          "نوع مسیریابی",
           style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.black87),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 5),
         Wrap(
-          spacing: 8,
-          runSpacing: 8,
+          spacing: 5,
+          runSpacing: 5,
           children: profiles.map((profile) {
             bool isSelected = _selectedProfile == profile["value"];
             return FilterChip(
