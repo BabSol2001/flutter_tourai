@@ -92,7 +92,7 @@ class _NavigationMapScreenState extends State<NavigationMapScreen>
     });
 
     _destinationControllers.add(_destinationController);
-    _destinationLatLngs = List.filled(1, null);
+    _destinationLatLngs = <LatLng?>[null];
   }
 
   @override
