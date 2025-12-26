@@ -10,7 +10,6 @@ import 'navigation/widgets/routing_card.dart';
 import 'navigation/widgets/advanced_search.dart';
 import 'navigation/widgets/history_manager.dart';
 import 'navigation/widgets/search_sheet.dart';
-import 'navigation/widgets/guidance_button.dart';
 
 class NavigationMapScreen extends StatefulWidget {
   final bool isDarkMode;
@@ -61,7 +60,6 @@ class _NavigationMapScreenState extends State<NavigationMapScreen>
   bool _isSearchMinimized = false;
   bool _isRoutingPanelMinimized = false;
   bool _isSelectingForRouting = false;
-  bool _isGuidanceMode = false; // آیا در حالت راهنمایی هستیم؟
 
   List<TextEditingController> _destinationControllers = [];
   int _activeDestinationIndex = 0;
@@ -742,27 +740,6 @@ void _openRoutingPanel() {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                              // دکمه شروع راهنمایی (فقط وقتی مسیر رسم شده دیده می‌شه)
-              GuidanceFloatingButton(
-                isRouteDrawn: _routePolylines.isNotEmpty,
-                onPressed: () {
-                  setState(() {
-                    _isGuidanceMode = true;
-                  });
-                  // نقشه رو به جهت حرکت بچرخان (شمال بالا نباشه، جهت حرکت بالا باشه)
-                  _resetNorth(); // اول شمال رو صاف کن
-                  // بعداً اینجا کدهای پیشرفته‌تر مثل دنبال کردن موقعیت و چرخش اضافه می‌کنیم
-
-                  _showSnackBar("راهنمایی پیمایش شروع شد! 🚗", success: true);
-
-                  // اختیاری: نقشه رو روی مبدا زوم کن
-                  if (_routePolylines.isNotEmpty) {
-                    final firstPoint = _routePolylines.first.points.first;
-                    _mapController.move(firstPoint, 18);
-                  }
-                },
-              ),
-              const SizedBox(height: 12), // فاصله بین دکمه‌ها
                 FloatingActionButton(
                   heroTag: "fab_search",
                   backgroundColor: (_isSearchMinimized || _isRoutingPanelMinimized)
