@@ -22,19 +22,19 @@ class RoutingTopPanel extends StatefulWidget {
   final VoidCallback onStartRouting;
   final VoidCallback onClose;
   final VoidCallback onMinimize;
-  final Function(int) onPickFromMap; // حالا index = -1 یعنی مبدا
+  final Function(int) onPickFromMap;
   final Function(List<TextEditingController>) onProvideControllers;
   final List<TextEditingController> initialControllers;
-  final Function(String) onProfileChanged;
+  final Function(String profile) onProfileChanged;
+
   final void Function(int index, LatLng location) onDestinationGeocoded;
-  final Function(LatLng) onOriginGeocoded; // جدید: وقتی مبدا geocode شد
 
   const RoutingTopPanel({
     Key? key,
     required this.originController,
     required this.destinationController,
     this.selectedDestination,
-    this.originLatLng,
+    required this.originLatLng,
     required this.isLoadingRoute,
     required this.modeNotifier,
     required this.onModeChanged,
@@ -49,7 +49,6 @@ class RoutingTopPanel extends StatefulWidget {
     required this.initialControllers,
     required this.onProfileChanged,
     required this.onDestinationGeocoded,
-    required this.onOriginGeocoded,
   }) : super(key: key);
 
   @override
@@ -96,13 +95,7 @@ class _RoutingTopPanelState extends State<RoutingTopPanel> {
             controller.text = displayName;
           });
 
-          if (index == -1) {
-            // مبدا
-            widget.onOriginGeocoded(LatLng(lat, lon));
-          } else {
-            // مقصد
-            widget.onDestinationGeocoded(index, LatLng(lat, lon));
-          }
+          widget.onDestinationGeocoded(index, LatLng(lat, lon));
 
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -129,7 +122,7 @@ class _RoutingTopPanelState extends State<RoutingTopPanel> {
 
     for (int i = 0; i < destinationControllers.length; i++) {
       final controller = destinationControllers[i];
-      final hint = i == 0 ? "مقصد" : "نقطه بعدی ${i + 1}";
+      final hint = i == 0 ? "مقصد" : "نقطه بعدی ${i}";
 
       fields.add(
         TextField(
@@ -137,8 +130,9 @@ class _RoutingTopPanelState extends State<RoutingTopPanel> {
           readOnly: false,
           textInputAction: TextInputAction.search,
           onTap: () {
-            SystemChannels.textInput.invokeMethod('TextInput.show');
-          },
+    // دستی کیبورد رو باز کن
+    SystemChannels.textInput.invokeMethod('TextInput.show');
+  },
           decoration: InputDecoration(
             hintText: hint,
             filled: true,
@@ -242,7 +236,9 @@ class _RoutingTopPanelState extends State<RoutingTopPanel> {
               child: SingleChildScrollView(
                 physics: const BouncingScrollPhysics(),
                 child: Padding(
-                  padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom + 20),
+                  padding: EdgeInsets.only(
+                    bottom: MediaQuery.of(context).viewInsets.bottom + 20, // ←←← این خط باعث می‌شه کیبورد پرش نکنه و پنل بالا بیاد
+                  ),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -252,84 +248,90 @@ class _RoutingTopPanelState extends State<RoutingTopPanel> {
                         children: [
                           Row(
                             children: [
-                              IconButton(onPressed: widget.onClose, icon: const Icon(Icons.close, color: Colors.grey, size: 28)),
-                              IconButton(onPressed: widget.onMinimize, icon: const Icon(Icons.minimize, color: Colors.grey, size: 28)),
+                              IconButton(
+                                onPressed: widget.onClose,
+                                icon: const Icon(Icons.close, color: Colors.grey, size: 28),
+                                tooltip: "بستن",
+                              ),
+                              IconButton(
+                                onPressed: widget.onMinimize,
+                                icon: const Icon(Icons.minimize, color: Colors.grey, size: 28),
+                                tooltip: "مینیمایز",
+                              ),
+                              
                             ],
                           ),
                           const Opacity(opacity: 0, child: Icon(Icons.close)),
                         ],
                       ),
-
-                      const Center(
-                        child: Text("مسیریابی هوشمند", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                      
+                      Container(
+                        alignment: Alignment.center,
+                        child: const Text(
+                          "مسیریابی هوشمند",
+                          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                        ),
                       ),
-                      const SizedBox(height: 16),
 
-                      // مبدا
                       TextField(
                         controller: widget.originController,
-                        readOnly: false,
-                        textInputAction: TextInputAction.search,
                         onTap: () {
                           if (widget.originController.text == "موقعیت فعلی") {
                             widget.originController.clear();
                           }
                           SystemChannels.textInput.invokeMethod('TextInput.show');
                         },
-                        onSubmitted: (query) {
-                          _geocodeAndSet(query, -1, widget.originController);
-                        },
                         decoration: InputDecoration(
-                          hintText: "مبدا (آدرس یا مختصات)",
+                          hintText: "مبدا",
                           filled: true,
                           fillColor: Colors.grey[100],
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                          prefixIcon: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              // انتخاب مبدا از نقشه
-                              GestureDetector(
-                                onTap: () => widget.onPickFromMap(-1),
-                                child: const Padding(
-                                  padding: EdgeInsets.all(12.0),
-                                  child: Icon(Icons.location_on, color: Colors.green, size: 26),
-                                ),
-                              ),
-                              // موقعیت فعلی
-                              GestureDetector(
-                                onTap: () async {
-                                  try {
-                                    Position position = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
-                                    final lat = position.latitude.toStringAsFixed(6);
-                                    final lng = position.longitude.toStringAsFixed(6);
-                                    widget.originController.text = "$lat, $lng";
-                                    widget.onOriginGeocoded(LatLng(position.latitude, position.longitude));
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(content: Text("مبدا: موقعیت فعلی شما"), backgroundColor: Colors.green),
-                                    );
-                                  } catch (e) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(content: Text("موقعیت در دسترس نیست"), backgroundColor: Colors.red),
-                                    );
-                                  }
-                                },
-                                child: const Padding(
-                                  padding: EdgeInsets.all(12.0),
-                                  child: Icon(Icons.my_location, color: Colors.blue, size: 24),
-                                ),
-                              ),
-                            ],
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide.none,
                           ),
-                          suffixIcon: widget.originController.text.isNotEmpty && widget.originController.text != "موقعیت فعلی"
-                              ? IconButton(icon: const Icon(Icons.clear), onPressed: () {
-                                  widget.originController.text = "موقعیت فعلی";
-                                  widget.onClearOrigin();
-                                })
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          prefixIcon: GestureDetector(
+                            onTap: () async {
+                              try {
+                                Position position = await Geolocator.getCurrentPosition(
+                                  desiredAccuracy: LocationAccuracy.high,
+                                );
+                                final lat = position.latitude.toStringAsFixed(6);
+                                final lng = position.longitude.toStringAsFixed(6);
+                                final coords = "$lat, $lng";
+                                widget.originController.text = coords;
+                                widget.onClearOrigin();
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: const Text("مبدا: موقعیت فعلی شما"),
+                                    backgroundColor: Colors.green,
+                                    behavior: SnackBarBehavior.floating,
+                                    duration: const Duration(seconds: 2),
+                                  ),
+                                );
+                              } catch (e) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text("موقعیت در دسترس نیست"),
+                                    backgroundColor: Colors.red,
+                                  ),
+                                );
+                              }
+                            },
+                            child: const Padding(
+                              padding: EdgeInsets.all(10.0),
+                              child: Icon(Icons.my_location, color: Colors.blue, size: 20),
+                            ),
+                          ),
+                          suffixIcon: widget.originLatLng != null
+                              ? IconButton(
+                                  icon: const Icon(Icons.clear),
+                                  onPressed: widget.onClearOrigin,
+                                )
                               : null,
                         ),
                       ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 5),
 
                       ..._buildDestinationFields(),
 
@@ -338,10 +340,14 @@ class _RoutingTopPanelState extends State<RoutingTopPanel> {
                       Center(
                         child: IconButton(
                           onPressed: widget.selectedDestination != null ? widget.onSwap : null,
-                          icon: Icon(Icons.swap_vert, size: 30, color: widget.selectedDestination != null ? Colors.blue : Colors.grey),
+                          icon: Icon(
+                            Icons.swap_vert,
+                            size: 30,
+                            color: widget.selectedDestination != null ? Colors.blue : Colors.grey,
+                          ),
                         ),
                       ),
-                      const SizedBox(height: 10),
+                      const SizedBox(height: 5),
 
                       ValueListenableBuilder<String>(
                         valueListenable: widget.modeNotifier,
@@ -357,13 +363,15 @@ class _RoutingTopPanelState extends State<RoutingTopPanel> {
                               });
                             },
                             onProfileSelected: (newProfile) {
-                              setState(() => _selectedProfile = newProfile);
+                              setState(() {
+                                _selectedProfile = newProfile;
+                              });
                               widget.onProfileChanged(newProfile);
                             },
                           );
                         },
                       ),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 10),
 
                       ValueListenableBuilder<String>(
                         valueListenable: widget.modeNotifier,
@@ -372,24 +380,33 @@ class _RoutingTopPanelState extends State<RoutingTopPanel> {
                           return SizedBox(
                             width: double.infinity,
                             child: ElevatedButton.icon(
-                              onPressed: widget.isLoadingRoute ? null : () {
-                                widget.onStartRouting();
-                                widget.onMinimize();
-                              },
+                              onPressed: widget.isLoadingRoute
+                                  ? null
+                                  : () {
+                                      widget.onStartRouting();
+                                      widget.onMinimize();
+                                    },
                               icon: widget.isLoadingRoute
-                                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                                  ? const SizedBox(
+                                      width: 15,
+                                      height: 10,
+                                      child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                                    )
                                   : const Icon(Icons.directions),
-                              label: Text(widget.isLoadingRoute ? "در حال رسم مسیر..." : "شروع مسیریابی با $displayName"),
+                              label: Text(
+                                widget.isLoadingRoute ? "در حال رسم مسیر..." : "شروع مسیریابی با $displayName",
+                              ),
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: Colors.blue,
-                                padding: const EdgeInsets.symmetric(vertical: 16),
+                                padding: const EdgeInsets.symmetric(vertical: 14),
                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                               ),
                             ),
                           );
                         },
                       ),
-                      const SizedBox(height: 8),
+
+                      const SizedBox(height: 5),
                     ],
                   ),
                 ),
