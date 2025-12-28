@@ -7,7 +7,6 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'package:geolocator/geolocator.dart';
 import 'package:flutter_compass/flutter_compass.dart';  // ←←← این خط جدید
-import 'package:url_launcher/url_launcher.dart';
 
 import 'navigation/widgets/routing_card.dart';
 import 'navigation/widgets/advanced_search.dart';
@@ -848,34 +847,7 @@ void _openRoutingPanel() {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-// ←←← دکمه جدید باز کردن گوگل مپس
-              FloatingActionButton(
-                heroTag: "fab_google_maps",
-                backgroundColor: Colors.yellowAccent,
-                onPressed: () {
-                  if (_routePoints.isEmpty || _routePoints.length < 2) {
-                    _showSnackBar("ابتدا یک مسیر رسم کنید!", success: false);
-                    return;
-                  }
-
-                  final origin = _routePoints.first;
-                  final destination = _routePoints.last;
-
-                  final googleMapsUrl = "https://www.google.com/maps/dir/?api=1"
-                      "&origin=${origin.latitude},${origin.longitude}"
-                      "&destination=${destination.latitude},${destination.longitude}"
-                      "&travelmode=driving";
-
-                  launchUrl(Uri.parse(googleMapsUrl), mode: LaunchMode.externalApplication);
-                },
-                child: Image.asset(
-                  'assets/images/google_maps_icon.png',  // آیکون گوگل مپس (اختیاری)
-                  width: 30,
-                  height: 30,
-                ),
-                tooltip: "باز کردن در گوگل مپس",
-              ),
-              const SizedBox(height: 12),                // دکمه شروع راهنمایی (فقط وقتی مسیر رسم شده دیده می‌شه)
+                              // دکمه شروع راهنمایی (فقط وقتی مسیر رسم شده دیده می‌شه)
               GuidanceFloatingButton(
                 isRouteDrawn: _routePolylines.isNotEmpty,
                 onPressed: () {

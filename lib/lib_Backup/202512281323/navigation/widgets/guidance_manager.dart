@@ -50,7 +50,7 @@ class GuidanceManager {
 
   void _initTTS() async {
     _flutterTts = FlutterTts();
-    await _flutterTts.setLanguage("en-US");
+    await _flutterTts.setLanguage("fa-IR");
     await _flutterTts.setSpeechRate(0.5);
     await _flutterTts.setVolume(1.0);
     await _flutterTts.setPitch(1.0);
