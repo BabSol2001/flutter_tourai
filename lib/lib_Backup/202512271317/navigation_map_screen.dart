@@ -403,18 +403,6 @@ void _onMapTapped(LatLng point) {
             var route = routes[0];
             var coords = route['route_coords'] as List;
 
-            print("=== دیباگ دستورات راهبری ===");
-            print("کل پاسخ routes: ${routes.length} مسیر");
-            print("کلیدهای route[0]: ${route.keys}");
-            print("آیا 'instructions' وجود دارد؟ ${route.containsKey('instructions')}");
-            if (route.containsKey('instructions')) {
-              print("تعداد دستورات: ${(route['instructions'] as List).length}");
-              print("دستور اول: ${(route['instructions'] as List)[0]}");
-            } else {
-              print("'instructions' در پاسخ وجود ندارد!");
-            }
-            print("=== پایان دیباگ ===");
-
             // ←←← این خط رو اینجا بگذار (خارج از حلقه)
             final List<LatLng> points = coords.map((c) => LatLng(c[0].toDouble(), c[1].toDouble())).toList();
 
@@ -484,7 +472,7 @@ void _onMapTapped(LatLng point) {
 
             // ←←← جدید: ذخیره maneuvers و نقاط مسیر
             var route = routes[0];  // فرض بهترین مسیر اولین باشه
-            _instructions = List<String>.from(route['instructions'] ?? []);
+            _instructions = route['maneuvers'] ?? [];
 
             // تبدیل points به fm.LatLng (اگر لازم باشه) — اما چون هر دو از flutter_map هستن، مستقیم اختصاص می‌دیم
             _routePoints = points.map((p) => LatLng(p.latitude, p.longitude)).toList();
