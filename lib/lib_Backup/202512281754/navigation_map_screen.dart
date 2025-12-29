@@ -60,7 +60,6 @@ class _NavigationMapScreenState extends State<NavigationMapScreen>
   final TextEditingController _searchController = TextEditingController();
   bool _isSearchingPoint = false;
   Marker? _tempSearchMarker;
-  Marker? _searchResultMarker;
 
   bool _isSelectingFromMap = false;
   bool _isSearchMinimized = false;
@@ -87,8 +86,7 @@ class _NavigationMapScreenState extends State<NavigationMapScreen>
 
   List<dynamic> _instructions = [];  // لیست دستورالعمل‌های گام به گام از Valhalla
   List<LatLng> _routePoints = [];  // نقاط مسیر برای محاسبه فاصله
-  String? _searchResultPlaceName;  // ← ذخیره نام مکان برای استفاده دوباره هنگام تپ روی پین
-  
+
   static const String baseUrl = "http://192.168.0.105:8000";
 
   final List<Map<String, dynamic>> transportModes = [
@@ -210,62 +208,62 @@ class _NavigationMapScreenState extends State<NavigationMapScreen>
     }
   }
 
-  void _onMapTapped(LatLng point) {
-    final coordsText = "${point.latitude.toStringAsFixed(6)}, ${point.longitude.toStringAsFixed(6)}";
+void _onMapTapped(LatLng point) {
+  final coordsText = "${point.latitude.toStringAsFixed(6)}, ${point.longitude.toStringAsFixed(6)}";
 
-    if (_isSelectingFromMap) {
-      setState(() {
-        _isSelectingFromMap = false;
+  if (_isSelectingFromMap) {
+    setState(() {
+      _isSelectingFromMap = false;
 
-        // اگر کاربر در حال انتخاب مبدا بود (index == -1)
-        if (_activeDestinationIndex == -1) {
-          _originLatLng = point;
-          _originController.text = coordsText;
-        }
-        // اگر در حال انتخاب یکی از مقصدها بود
-        else if (_activeDestinationIndex >= 0 && _activeDestinationIndex < _destinationControllers.length) {
-          _destinationControllers[_activeDestinationIndex].text = coordsText;
-
-          // آپدیت مختصات مقصد
-          if (_destinationLatLngs.length <= _activeDestinationIndex) {
-            _destinationLatLngs.length = _activeDestinationIndex + 1;
-          }
-          _destinationLatLngs[_activeDestinationIndex] = point;
-
-          if (_activeDestinationIndex == 0) {
-            _selectedDestination = point;
-          }
-        }
-
-        _mapController.move(point, 16);
-      });
-
-      _showSnackBar(
-        _activeDestinationIndex == -1 ? "مبدا انتخاب شد" : "مقصد انتخاب شد",
-        success: true,
-      );
-
-      // اگر از پنل مسیریابی اومده بود، دوباره بازش کن
-      if (_isSelectingForRouting) {
-        _isRoutingPanelMinimized = false;
-        _openRoutingPanel();
+      // اگر کاربر در حال انتخاب مبدا بود (index == -1)
+      if (_activeDestinationIndex == -1) {
+        _originLatLng = point;
+        _originController.text = coordsText;
       }
-    } 
-    // اگر مستقیم روی نقشه تپ کرده (نه در حالت انتخاب)
-    else {
-      setState(() {
-        if (_destinationControllers.isNotEmpty) {
-          _destinationControllers[0].text = coordsText;
-          _selectedDestination = point;
-          if (_destinationLatLngs.isNotEmpty) {
-            _destinationLatLngs[0] = point;
-          }
+      // اگر در حال انتخاب یکی از مقصدها بود
+      else if (_activeDestinationIndex >= 0 && _activeDestinationIndex < _destinationControllers.length) {
+        _destinationControllers[_activeDestinationIndex].text = coordsText;
+
+        // آپدیت مختصات مقصد
+        if (_destinationLatLngs.length <= _activeDestinationIndex) {
+          _destinationLatLngs.length = _activeDestinationIndex + 1;
         }
-        _mapController.move(point, 16);
-      });
-      _showSnackBar("مقصد انتخاب شد", success: true);
+        _destinationLatLngs[_activeDestinationIndex] = point;
+
+        if (_activeDestinationIndex == 0) {
+          _selectedDestination = point;
+        }
+      }
+
+      _mapController.move(point, 16);
+    });
+
+    _showSnackBar(
+      _activeDestinationIndex == -1 ? "مبدا انتخاب شد" : "مقصد انتخاب شد",
+      success: true,
+    );
+
+    // اگر از پنل مسیریابی اومده بود، دوباره بازش کن
+    if (_isSelectingForRouting) {
+      _isRoutingPanelMinimized = false;
+      _openRoutingPanel();
     }
+  } 
+  // اگر مستقیم روی نقشه تپ کرده (نه در حالت انتخاب)
+  else {
+    setState(() {
+      if (_destinationControllers.isNotEmpty) {
+        _destinationControllers[0].text = coordsText;
+        _selectedDestination = point;
+        if (_destinationLatLngs.isNotEmpty) {
+          _destinationLatLngs[0] = point;
+        }
+      }
+      _mapController.move(point, 16);
+    });
+    _showSnackBar("مقصد انتخاب شد", success: true);
   }
+}
 
   void _swapOriginAndDestination() {
     if (_originLatLng == null && _destinationControllers.isEmpty) return;
@@ -636,128 +634,128 @@ void _startGuidance() {
     });
   }
 
-  void _openRoutingPanel() {
-    
-    // اول هر دیالوگ یا شیت قبلی رو ببند
-    if (Navigator.canPop(context)) {
-      Navigator.pop(context);
-    }
+void _openRoutingPanel() {
+  
+  // اول هر دیالوگ یا شیت قبلی رو ببند
+  if (Navigator.canPop(context)) {
+    Navigator.pop(context);
+  }
 
-    Future.delayed(const Duration(milliseconds: 200), () {
-      showGeneralDialog(
-        context: context,
-        barrierDismissible: true,
-        barrierLabel: "routing_panel",
-        barrierColor: Colors.black.withOpacity(0.3), // ← تاریکی ملایم، نقشه دیده می‌شه
-        transitionDuration: const Duration(milliseconds: 320),
-        pageBuilder: (_, __, ___) {
-          return Material(
-            color: Colors.transparent,
-            child: SafeArea(
-              child: Align(
-                alignment: Alignment.topCenter,
-                
-                  child: Padding(
-                    padding: const EdgeInsets.all(5),
-                    child: SingleChildScrollView(
-                      physics: const BouncingScrollPhysics(),
-                      child: Padding(
-                        padding: EdgeInsets.only(
-                          bottom: MediaQuery.of(context).viewInsets.bottom + 20, // ← این خط کیبورد رو درست می‌کنه
-                        ),
-                      child: RoutingTopPanel(
-                        originController: _originController,
-                        destinationController: _destinationController,
-                        selectedDestination: _selectedDestination,
-                        originLatLng: _originLatLng,
-                        isLoadingRoute: _isLoadingRoute,
-                        modeNotifier: _modeNotifier,
-                        initialControllers: _destinationControllers,
-                        onModeChanged: (mode) {
-                          _selectedMode = mode;
-                          _modeNotifier.value = mode;
-                        },
-                        onSwap: _swapOriginAndDestination,
-                        onClearDestination: () => setState(() {
-                          _destinationController.clear();
-                          _selectedDestination = null;
-                          _waypointMarkers.clear();
-                          if (_destinationLatLngs.isNotEmpty) _destinationLatLngs[0] = null;
-                        }),
-                        onClearOrigin: () => setState(() {
-                          _originLatLng = null;
-                          _originController.text = "موقعیت فعلی";
-                        }),
-                        onStartRouting: _startRouting,
-                        onClose: () => Navigator.pop(context),
-                        onMinimize: () {
-                          Navigator.pop(context);
-                          setState(() => _isRoutingPanelMinimized = true);
-                        },
-                        onProfileChanged: (newProfile) {
-                          _profileNotifier.value = newProfile;
-                        },
-                        onPickFromMap: (int index) {
-                          setState(() {
-                            _activeDestinationIndex = index;
-                            _isSelectingFromMap = true;
-                            _isSelectingForRouting = true;
-                            _isRoutingPanelMinimized = true;
-
-                            if (index == -1) {
-                              _showSnackBar("مبدا را روی نقشه انتخاب کنید", success: true);
-                            } else {
-                              _showSnackBar("مقصد را روی نقشه انتخاب کنید", success: true);
-                            }
-                          });
-                          Navigator.pop(context);
-                        },
-                        onProvideControllers: (controllers) {
-                          setState(() {
-                            _destinationControllers = controllers;
-                            if (_destinationLatLngs.length < controllers.length) {
-                              _destinationLatLngs.addAll(List.filled(controllers.length - _destinationLatLngs.length, null));
-                            } else if (_destinationLatLngs.length > controllers.length) {
-                              _destinationLatLngs = _destinationLatLngs.sublist(0, controllers.length);
-                            }
-                          });
-                        },
-                        onDestinationGeocoded: (int index, LatLng location) {
-                          setState(() {
-                            if (_destinationLatLngs.length <= index) {
-                              _destinationLatLngs.length = index + 1;
-                            }
-                            _destinationLatLngs[index] = location;
-                            if (index == 0) _selectedDestination = location;
-                          });
-                        },
-                        onOriginGeocoded: (LatLng location) {
-                          setState(() {
-                            _originLatLng = location;
-                          });
-    
-                          _showSnackBar("مبدا از نقشه انتخاب شد", success: true);
-                        },
+  Future.delayed(const Duration(milliseconds: 200), () {
+    showGeneralDialog(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: "routing_panel",
+      barrierColor: Colors.black.withOpacity(0.3), // ← تاریکی ملایم، نقشه دیده می‌شه
+      transitionDuration: const Duration(milliseconds: 320),
+      pageBuilder: (_, __, ___) {
+        return Material(
+          color: Colors.transparent,
+          child: SafeArea(
+            child: Align(
+              alignment: Alignment.topCenter,
+              
+                child: Padding(
+                  padding: const EdgeInsets.all(5),
+                  child: SingleChildScrollView(
+                    physics: const BouncingScrollPhysics(),
+                    child: Padding(
+                      padding: EdgeInsets.only(
+                        bottom: MediaQuery.of(context).viewInsets.bottom + 20, // ← این خط کیبورد رو درست می‌کنه
                       ),
+                     child: RoutingTopPanel(
+  originController: _originController,
+  destinationController: _destinationController,
+  selectedDestination: _selectedDestination,
+  originLatLng: _originLatLng,
+  isLoadingRoute: _isLoadingRoute,
+  modeNotifier: _modeNotifier,
+  initialControllers: _destinationControllers,
+  onModeChanged: (mode) {
+    _selectedMode = mode;
+    _modeNotifier.value = mode;
+  },
+  onSwap: _swapOriginAndDestination,
+  onClearDestination: () => setState(() {
+    _destinationController.clear();
+    _selectedDestination = null;
+    _waypointMarkers.clear();
+    if (_destinationLatLngs.isNotEmpty) _destinationLatLngs[0] = null;
+  }),
+  onClearOrigin: () => setState(() {
+    _originLatLng = null;
+    _originController.text = "موقعیت فعلی";
+  }),
+  onStartRouting: _startRouting,
+  onClose: () => Navigator.pop(context),
+  onMinimize: () {
+    Navigator.pop(context);
+    setState(() => _isRoutingPanelMinimized = true);
+  },
+  onProfileChanged: (newProfile) {
+    _profileNotifier.value = newProfile;
+  },
+  onPickFromMap: (int index) {
+    setState(() {
+      _activeDestinationIndex = index;
+      _isSelectingFromMap = true;
+      _isSelectingForRouting = true;
+      _isRoutingPanelMinimized = true;
+
+      if (index == -1) {
+        _showSnackBar("مبدا را روی نقشه انتخاب کنید", success: true);
+      } else {
+        _showSnackBar("مقصد را روی نقشه انتخاب کنید", success: true);
+      }
+    });
+    Navigator.pop(context);
+  },
+  onProvideControllers: (controllers) {
+    setState(() {
+      _destinationControllers = controllers;
+      if (_destinationLatLngs.length < controllers.length) {
+        _destinationLatLngs.addAll(List.filled(controllers.length - _destinationLatLngs.length, null));
+      } else if (_destinationLatLngs.length > controllers.length) {
+        _destinationLatLngs = _destinationLatLngs.sublist(0, controllers.length);
+      }
+    });
+  },
+  onDestinationGeocoded: (int index, LatLng location) {
+    setState(() {
+      if (_destinationLatLngs.length <= index) {
+        _destinationLatLngs.length = index + 1;
+      }
+      _destinationLatLngs[index] = location;
+      if (index == 0) _selectedDestination = location;
+    });
+  },
+  onOriginGeocoded: (LatLng location) {
+    setState(() {
+      _originLatLng = location;
+    });
+  
+                        _showSnackBar("مبدا از نقشه انتخاب شد", success: true);
+                      },
                     ),
                   ),
                 ),
               ),
             ),
-            
-          );
-        },
+          ),
+          
+        );
+      },
 
-        transitionBuilder: (_, animation, __, child) {
-          return SlideTransition(
-            position: Tween<Offset>(begin: const Offset(0, -1), end: Offset.zero)
-                .animate(CurvedAnimation(parent: animation, curve: Curves.easeOutCubic)),
-            child: child,
-          );
-        },
-      );
-    });
-  }
+      transitionBuilder: (_, animation, __, child) {
+        return SlideTransition(
+          position: Tween<Offset>(begin: const Offset(0, -1), end: Offset.zero)
+              .animate(CurvedAnimation(parent: animation, curve: Curves.easeOutCubic)),
+          child: child,
+        );
+      },
+    );
+  });
+}
 
   void _openAdvancedSearch({String? autoSearch}) {
     LatLng finalCenter = _selectedDestination ?? 
@@ -777,7 +775,6 @@ void _startGuidance() {
             _openSearchFromFab();
           },
           autoSearchCategory: autoSearch,
-          onSelectPlace: _handlePlaceSelected,  // ← این خط
         ),
       ),
     );
@@ -833,8 +830,7 @@ void _startGuidance() {
             children: [
               TileLayer(
                 urlTemplate: "https://{s}.tile.openstreetmap.de/{z}/{x}/{y}.png",
-                userAgentPackageName: 'tourai.com',
-                //subdomains: const ['a', 'b', 'c'],
+                subdomains: const ['a', 'b', 'c'],
               ),
               PolylineLayer(polylines: _routePolylines),
               MarkerLayer(markers: [
@@ -842,7 +838,6 @@ void _startGuidance() {
                 ..._waypointMarkers,
                 if (_tempSearchMarker != null) _tempSearchMarker!,
                 if (_userPositionMarker != null) _userPositionMarker!,  // ← جدید: مارکر outline کاربر
-                if (_searchResultMarker != null) _searchResultMarker!,
               ]),
             ],
           ),
@@ -964,130 +959,5 @@ void _startGuidance() {
         ],
       ),
     );
-  }
-
-  void _handlePlaceSelected(LatLng point, String? name) async {
-    // اول آدرس کامل رو از reverse geocode بگیر
-    final String fullAddress = await _getReverseGeocode(point);
-
-    // اگر name وجود داشته باشه، با آدرس ترکیب کن (برای کامل‌تر شدن)
-    final String displayText = name?.trim().isNotEmpty == true 
-        ? "$name - $fullAddress" 
-        : fullAddress;
-
-    setState(() {
-      _selectedDestination = point;
-      _destinationController.text = displayText;
-
-      if (_destinationLatLngs.isEmpty) {
-        _destinationLatLngs = [point];
-      } else {
-        _destinationLatLngs[0] = point;
-      }
-
-      _searchResultPlaceName = displayText;
-
-      _searchResultMarker = Marker(
-        point: point,
-        width: 90,
-        height: 90,
-        child: _buildPlaceMarker(displayText),
-      );
-    });
-
-    _mapController.move(point, 17.5);
-    _showSnackBar("مقصد تنظیم شد: $displayText", success: true);
-
-    // جدید: نوشتن آدرس در فیلد جستجو و باز کردن شیت جستجو
-    _searchController.text = displayText;
-
-    // باز کردن پنل مسیریابی و جستجو
-    Future.delayed(const Duration(milliseconds: 500), () {
-      if (!mounted) return;
-      if (_isRoutingPanelMinimized || _isSearchMinimized || !Navigator.canPop(context)) {
-        _openRoutingPanel();
-        setState(() {
-          _isRoutingPanelMinimized = false;
-          _isSearchMinimized = false;
-        });
-      } else {
-        // اگر پنل مسیریابی باز باشه، شیت جستجو رو باز کن
-        _openSearchFromFab();
-      }
-    });
-  }
-
-  Widget _buildPlaceMarker(String name) {
-    return Stack(
-      clipBehavior: Clip.none,
-      alignment: Alignment.center,
-      children: [
-        // پین اصلی
-        const Icon(
-          Icons.location_pin,
-          color: Colors.deepPurple,
-          size: 64,
-          shadows: [
-            Shadow(
-              color: Colors.black45,
-              blurRadius: 8,
-              offset: Offset(0, 4),
-            ),
-          ],
-        ),
-
-        // لیبل نام مکان بالای پین
-        Positioned(
-          top: -12,
-          child: Container(
-            constraints: const BoxConstraints(maxWidth: 160),
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: Colors.deepPurple, width: 2),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.3),
-                  blurRadius: 8,
-                  offset: const Offset(0, 3),
-                ),
-              ],
-            ),
-            child: Text(
-              name,
-              style: const TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.bold,
-                color: Colors.deepPurple,
-              ),
-              textAlign: TextAlign.center,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Future<String> _getReverseGeocode(LatLng point) async {
-    final url = Uri.parse(
-      'https://nominatim.openstreetmap.org/reverse?lat=${point.latitude}&lon=${point.longitude}&format=json&limit=1',
-    );
-
-    try {
-      final response = await http.get(url, headers: {'User-Agent': 'TourAI/1.0'});
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        if (data != null && data['display_name'] != null) {
-          return data['display_name'];
-        }
-      }
-    } catch (e) {
-      print("خطا در reverse geocode: $e");
-    }
-    // اگر خطا یا ناموجود، مختصات رو برگردون
-    return "${point.latitude.toStringAsFixed(6)}, ${point.longitude.toStringAsFixed(6)}";
   }
 }

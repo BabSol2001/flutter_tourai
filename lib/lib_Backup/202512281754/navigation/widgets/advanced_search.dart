@@ -68,7 +68,6 @@ class AdvancedSearchSheet extends StatefulWidget {
   final VoidCallback onClose;
   final VoidCallback onBackToSearch; // جدید: برای برگشت به منوی جستجو
   final String? autoSearchCategory;
-  final Function(LatLng, String?)? onSelectPlace; // ← جدید
 
   const AdvancedSearchSheet({
     Key? key,
@@ -76,7 +75,6 @@ class AdvancedSearchSheet extends StatefulWidget {
     required this.onClose,
     required this.onBackToSearch,
     this.autoSearchCategory,
-    this.onSelectPlace, // ← جدید
   }) : super(key: key);
 
   @override
@@ -112,69 +110,69 @@ class _AdvancedSearchSheetState extends State<AdvancedSearchSheet> {
     if (widget.autoSearchCategory != null) {
       Future.delayed(const Duration(milliseconds: 500), () {
         if (widget.autoSearchCategory != null) {
-          Future.delayed(const Duration(milliseconds: 600), () {
-            switch (widget.autoSearchCategory) {
-              case "cafe":
-                _searchCategory('amenity=cafe', "کافه");
-                break;
-              case "restaurant":
-                _searchCategory('amenity=restaurant', "رستوران");
-                break;
-              case "fuel":
-                _searchCategory('amenity=fuel', "پمپ بنزین");
-                break;
-              case "pharmacy":
-                _searchCategory('amenity=pharmacy', "داروخانه");
-                break;
-              case "hospital":
-                _searchCategory('amenity=hospital', "بیمارستان");
-                break;
-              case "bus_stop":
-                _searchBusStops(); // این تابع جدا داره، پس مستقیم صدا می‌زنیم
-                break;
-              case "supermarket":
-                _searchSupermarket(); // اینم تابع جدا داره
-                break;
-              case "park":
-                _searchCategory('leisure=park', "پارک");
-                break;
-              case "bank":
-                _searchBanksAndAtms(); // این شامل بانک و خودپرداز میشه
-                break;
-              case "free_parking":
-                _searchFreeStreetParking();
-                break;
-              case "school":
-                _searchEducationalPlaces();
-                break;
-              case "charging_station":
-                _searchCategory('amenity=charging_station', "ایستگاه شارژ برقی");
-                break;
-              case "bicycle_rental":
-                _searchCategory('amenity=bicycle_rental', "کرایه دوچرخه");
-                break;
-              case "metro":
-                _searchCategory('railway=station AND (station=subway OR railway=subway)', "ایستگاه مترو");
-                break;
-              case "tourism":
-                _searchTouristAttractions();
-                break;
-              case "worship":
-                _searchPlacesOfWorship();
-                break;
-              case "chain_store":
-                _searchChainStoresFromBackend();
-                break;
-              case "parking":
-                _searchCategory('amenity=parking', "پارکینگ عمومی");
-                break;
+  Future.delayed(const Duration(milliseconds: 600), () {
+    switch (widget.autoSearchCategory) {
+      case "cafe":
+        _searchCategory('amenity=cafe', "کافه");
+        break;
+      case "restaurant":
+        _searchCategory('amenity=restaurant', "رستوران");
+        break;
+      case "fuel":
+        _searchCategory('amenity=fuel', "پمپ بنزین");
+        break;
+      case "pharmacy":
+        _searchCategory('amenity=pharmacy', "داروخانه");
+        break;
+      case "hospital":
+        _searchCategory('amenity=hospital', "بیمارستان");
+        break;
+      case "bus_stop":
+        _searchBusStops(); // این تابع جدا داره، پس مستقیم صدا می‌زنیم
+        break;
+      case "supermarket":
+        _searchSupermarket(); // اینم تابع جدا داره
+        break;
+      case "park":
+        _searchCategory('leisure=park', "پارک");
+        break;
+      case "bank":
+        _searchBanksAndAtms(); // این شامل بانک و خودپرداز میشه
+        break;
+      case "free_parking":
+        _searchFreeStreetParking();
+        break;
+      case "school":
+        _searchEducationalPlaces();
+        break;
+      case "charging_station":
+        _searchCategory('amenity=charging_station', "ایستگاه شارژ برقی");
+        break;
+      case "bicycle_rental":
+        _searchCategory('amenity=bicycle_rental', "کرایه دوچرخه");
+        break;
+      case "metro":
+        _searchCategory('railway=station AND (station=subway OR railway=subway)', "ایستگاه مترو");
+        break;
+      case "tourism":
+        _searchTouristAttractions();
+        break;
+      case "worship":
+        _searchPlacesOfWorship();
+        break;
+      case "chain_store":
+        _searchChainStoresFromBackend();
+        break;
+      case "parking":
+        _searchCategory('amenity=parking', "پارکینگ عمومی");
+        break;
 
-              // اگر چیزی اشتباه بود یا پیدا نشد، حداقل یه چیزی نشون بده
-              default:
-                _searchCategory('amenity=cafe', "جستجوی پیشرفته");
-            }
-          });
-        }
+      // اگر چیزی اشتباه بود یا پیدا نشد، حداقل یه چیزی نشون بده
+      default:
+        _searchCategory('amenity=cafe', "جستجوی پیشرفته");
+    }
+  });
+}
       });
     }
   }
@@ -319,21 +317,6 @@ class _AdvancedSearchSheetState extends State<AdvancedSearchSheet> {
                           subtitle: Text("$dist متر"),
                           trailing: const Icon(Icons.arrow_forward_ios, size: 16),
                           onTap: () {
-                            final lat = place['lat'] ?? place['center']?['lat'];
-                            final lon = place['lon'] ?? place['center']?['lon'];
-                            if (lat != null && lon != null) {
-                              final point = LatLng(lat, lon);
-                              String? placeName = place['tags']?['name:fa'] ?? place['tags']?['name'] ?? "مکان بدون نام";
-                              
-                              // جدید: اگر آدرس جزئیات داشته باشه، اضافه کن
-                              final street = place['tags']?['addr:street'] ?? '';
-                              final houseNumber = place['tags']?['addr:housenumber'] ?? '';
-                              if (street.isNotEmpty) {
-                                placeName = "$placeName, $street $houseNumber";
-                              }
-                              
-                              widget.onSelectPlace?.call(point, placeName);
-                            }
                             widget.onClose();
                           },
                         );
@@ -765,4 +748,5 @@ class _AdvancedSearchSheetState extends State<AdvancedSearchSheet> {
       setState(() => _isLoading = false);
     }
   }
+
 }
