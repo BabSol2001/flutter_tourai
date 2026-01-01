@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'dart:async';
 import 'dart:math' as math;
 import 'package:geolocator/geolocator.dart';
-import 'package:flutter_compass/flutter_compass.dart';
+import 'package:flutter_compass/flutter_compass.dart';  // ←←← این خط جدید
 import 'package:url_launcher/url_launcher.dart';
-import 'package:latlong2/latlong.dart';
 
 import 'navigation/widgets/routing_card.dart';
 import 'navigation/widgets/advanced_search.dart';
@@ -15,7 +15,6 @@ import 'navigation/widgets/history_manager.dart';
 import 'navigation/widgets/search_sheet.dart';
 import 'navigation/widgets/guidance_button.dart';
 import 'navigation/widgets/guidance_manager.dart';
-import 'navigation/widgets/guidance_simulator.dart';
 
 class NavigationMapScreen extends StatefulWidget {
   final bool isDarkMode;
@@ -67,12 +66,12 @@ class _NavigationMapScreenState extends State<NavigationMapScreen>
   bool _isSearchMinimized = false;
   bool _isRoutingPanelMinimized = false;
   bool _isSelectingForRouting = false;
-  bool _isGuidanceMode = false;
+  bool _isGuidanceMode = false; // آیا در حالت راهنمایی هستیم؟
 
-  StreamSubscription<Position>? _positionStream;
-  Marker? _userPositionMarker;
-  double _currentBearing = 0.0;
-  StreamSubscription<CompassEvent>? _compassStream;
+  StreamSubscription<Position>? _positionStream;  // برای دنبال کردن موقعیت لایو
+  Marker? _userPositionMarker;  // مارکر outline برای موقعیت کاربر
+  double _currentBearing = 0.0;  // جهت فعلی (برای چرخش نقشه)
+  StreamSubscription<CompassEvent>? _compassStream;  // برای جهت دستگاه
 
   List<TextEditingController> _destinationControllers = [];
   int _activeDestinationIndex = 0;
@@ -82,17 +81,14 @@ class _NavigationMapScreenState extends State<NavigationMapScreen>
   OverlayEntry? _routingPanelOverlay;
 
   GuidanceManager? _guidanceManager;
-  bool _isSimulationMode = false;
-  GuidanceSimulator? _guidanceSimulator;
   String _currentInstruction = "";
   IconData _currentTurnIcon = Icons.arrow_upward;
   double _distanceToNext = 0.0;
 
-  List<String> _instructions = [];  // ← تغییر به List<String>
-  List<LatLng> _routePoints = [];
-
-  String? _searchResultPlaceName;
-
+  List<dynamic> _instructions = [];  // لیست دستورالعمل‌های گام به گام از Valhalla
+  List<LatLng> _routePoints = [];  // نقاط مسیر برای محاسبه فاصله
+  String? _searchResultPlaceName;  // ← ذخیره نام مکان برای استفاده دوباره هنگام تپ روی پین
+  
   static const String baseUrl = "http://192.168.0.105:8000";
 
   final List<Map<String, dynamic>> transportModes = [
@@ -130,6 +126,7 @@ class _NavigationMapScreenState extends State<NavigationMapScreen>
     super.dispose();
   }
 
+  // ←←← تابع geocode خودکار (خارج از _startRouting)
   Future<LatLng?> _geocodeAddress(String query) async {
     if (query.trim().isEmpty) return null;
 
@@ -220,12 +217,16 @@ class _NavigationMapScreenState extends State<NavigationMapScreen>
       setState(() {
         _isSelectingFromMap = false;
 
+        // اگر کاربر در حال انتخاب مبدا بود (index == -1)
         if (_activeDestinationIndex == -1) {
           _originLatLng = point;
           _originController.text = coordsText;
-        } else if (_activeDestinationIndex >= 0 && _activeDestinationIndex < _destinationControllers.length) {
+        }
+        // اگر در حال انتخاب یکی از مقصدها بود
+        else if (_activeDestinationIndex >= 0 && _activeDestinationIndex < _destinationControllers.length) {
           _destinationControllers[_activeDestinationIndex].text = coordsText;
 
+          // آپدیت مختصات مقصد
           if (_destinationLatLngs.length <= _activeDestinationIndex) {
             _destinationLatLngs.length = _activeDestinationIndex + 1;
           }
@@ -244,11 +245,14 @@ class _NavigationMapScreenState extends State<NavigationMapScreen>
         success: true,
       );
 
+      // اگر از پنل مسیریابی اومده بود، دوباره بازش کن
       if (_isSelectingForRouting) {
         _isRoutingPanelMinimized = false;
         _openRoutingPanel();
       }
-    } else {
+    } 
+    // اگر مستقیم روی نقشه تپ کرده (نه در حالت انتخاب)
+    else {
       setState(() {
         if (_destinationControllers.isNotEmpty) {
           _destinationControllers[0].text = coordsText;
@@ -317,7 +321,7 @@ class _NavigationMapScreenState extends State<NavigationMapScreen>
     if (_originLatLng != null) {
       origin = _originLatLng!;
     } else if (_originController.text != "موقعیت فعلی" && _originController.text.isNotEmpty) {
-      origin = await _geocodeAddress(_originController.text);
+      origin = await _geocodeAddress(_originController.text);  // اگر آدرس تایپ کرده
       if (origin == null) {
         _showSnackBar("مبدا پیدا نشد");
         return;
@@ -334,7 +338,7 @@ class _NavigationMapScreenState extends State<NavigationMapScreen>
     print("=== شروع مسیریابی ===");
     print("مبدا: ${origin.latitude}, ${origin.longitude}");
 
-    // مقصدها
+    // مقصدها — با geocode خودکار اگر مختصات نداشت
     bool hasValidDestination = false;
     for (int i = 0; i < _destinationControllers.length; i++) {
       final text = _destinationControllers[i].text.trim();
@@ -345,7 +349,9 @@ class _NavigationMapScreenState extends State<NavigationMapScreen>
 
         if (_destinationLatLngs.length > i && _destinationLatLngs[i] != null) {
           location = _destinationLatLngs[i];
+          print("مقصد $i - مختصات موجود: ${location!.latitude}, ${location.longitude}");
         } else {
+          print("مقصد $i - در حال جستجوی خودکار مختصات...");
           location = await _geocodeAddress(text);
           if (location == null) {
             _showSnackBar("نتوانستیم مکان '$text' را پیدا کنیم");
@@ -359,6 +365,7 @@ class _NavigationMapScreenState extends State<NavigationMapScreen>
             _destinationLatLngs[i] = location;
             if (i == 0) _selectedDestination = location;
           });
+          print("مقصد $i - مختصات پیدا شد: ${location.latitude}, ${location.longitude}");
         }
 
         waypoints.add(location!);
@@ -366,32 +373,56 @@ class _NavigationMapScreenState extends State<NavigationMapScreen>
       }
     }
 
+    print("لیست نهایی waypoints: $waypoints");
+    print("تعداد نقاط: ${waypoints.length}");
+
     if (waypoints.length < 2 || !hasValidDestination) {
+      print("خطا: مقصد معتبر نیست");
       _showSnackBar("حداقل یک مقصد معتبر انتخاب کنید");
       setState(() => _isLoadingRoute = false);
       return;
     }
 
+    print("در حال ارسال به بک‌اند...");
     setState(() => _isLoadingRoute = true);
 
     final coordsList = waypoints.map((p) => "${p.longitude},${p.latitude}").join('|');
+    print("coords string: $coordsList");
+
     final url = Uri.parse('$baseUrl/api/v1/osm/smart-route/?coords=$coordsList&engine=$_selectedEngine&mode=$_selectedMode');
 
     try {
       final res = await http.get(url).timeout(const Duration(seconds: 40));
+      print("پاسخ سرور: ${res.statusCode}");
+
       if (res.statusCode == 200) {
         final data = json.decode(res.body);
+        print("داده دریافتی: $data");
         
         if (data['success'] == true) {
           List<Polyline> lines = [];
-          final routes = data['routes'] as List;
-          var route = routes[0];
-          var coords = route['route_coords'] as List;
+            final routes = data['routes'] as List;
 
-          final List<LatLng> points = coords.map((c) => LatLng(c[0].toDouble(), c[1].toDouble())).toList();
+            var route = routes[0];
+            var coords = route['route_coords'] as List;
 
-          for (int i = 0; i < routes.length; i++) {
-            Color routeColor = i == 0 ? Colors.blue.shade700 : Colors.green.shade600;
+            print("=== دیباگ دستورات راهبری ===");
+            print("کل پاسخ routes: ${routes.length} مسیر");
+            print("کلیدهای route[0]: ${route.keys}");
+            print("آیا 'instructions' وجود دارد؟ ${route.containsKey('instructions')}");
+            if (route.containsKey('instructions')) {
+              print("تعداد دستورات: ${(route['instructions'] as List).length}");
+              print("دستور اول: ${(route['instructions'] as List)[0]}");
+            } else {
+              print("'instructions' در پاسخ وجود ندارد!");
+            }
+            print("=== پایان دیباگ ===");
+
+            // ←←← این خط رو اینجا بگذار (خارج از حلقه)
+            final List<LatLng> points = coords.map((c) => LatLng(c[0].toDouble(), c[1].toDouble())).toList();
+
+            for (int i = 0; i < routes.length; i++) {
+              var r = routes[i];            Color routeColor = i == 0 ? Colors.blue.shade700 : Colors.green.shade600;
             double width = i == 0 ? 10.0 : 8.0;
 
             lines.add(Polyline(
@@ -450,16 +481,21 @@ class _NavigationMapScreenState extends State<NavigationMapScreen>
             );
           }).toList();
 
-          setState(() {
+         setState(() {
             _routePolylines = lines;
             _waypointMarkers = markers;
 
-            _instructions = List<String>.from(route['instructions'] ?? []);  // ← درست شده
+            // ←←← جدید: ذخیره maneuvers و نقاط مسیر
+            var route = routes[0];  // فرض بهترین مسیر اولین باشه
+            _instructions = List<String>.from(route['instructions'] ?? []);
 
-            _routePoints = points;
+            // تبدیل points به fm.LatLng (اگر لازم باشه) — اما چون هر دو از flutter_map هستن، مستقیم اختصاص می‌دیم
+            _routePoints = points.map((p) => LatLng(p.latitude, p.longitude)).toList();
 
+            print("تعداد maneuvers دریافت شده: ${_instructions.length}");
+            // اختیاری: آماده‌سازی دستور اولیه برای بانر
             if (_instructions.isNotEmpty) {
-              _currentInstruction = _instructions[0];
+              _currentInstruction = "بعد از شروع حرکت\n${_instructions[0]['instruction'] ?? 'مستقیم بروید'}";
               _currentTurnIcon = Icons.arrow_upward;
             } else {
               _currentInstruction = "در حال حرکت";
@@ -467,6 +503,7 @@ class _NavigationMapScreenState extends State<NavigationMapScreen>
             }
           });
 
+          print("مسیر و مارکرها رسم شدند");
           _fitRouteToScreen();
         } else {
           _showSnackBar("سرور مسیر پیدا نکرد");
@@ -479,54 +516,55 @@ class _NavigationMapScreenState extends State<NavigationMapScreen>
       _showSnackBar("خطا در ارتباط با سرور");
     } finally {
       setState(() => _isLoadingRoute = false);
+      print("=== پایان مسیریابی ===");
     }
   }
 
-  void _startGuidance() {
-    // دنبال کردن موقعیت کاربر
-    _positionStream = Geolocator.getPositionStream(
-      locationSettings: const LocationSettings(
-        accuracy: LocationAccuracy.high,
-        distanceFilter: 5,
-      ),
-    ).listen((Position position) {
-      if (!mounted) return;
-      setState(() {
-        _userPositionMarker = Marker(
-          point: LatLng(position.latitude, position.longitude),
-          width: 50,
-          height: 50,
-          child: Container(
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              border: Border.all(color: Colors.green.shade800, width: 3),
-              color: Colors.transparent,
-            ),
-            child: const Icon(
-              Icons.circle_outlined,
-              color: const Color(0xFF1B5E20),
-              size: 40,
-            ),
+void _startGuidance() {
+  // دنبال کردن موقعیت کاربر
+  _positionStream = Geolocator.getPositionStream(
+    locationSettings: const LocationSettings(
+      accuracy: LocationAccuracy.high,
+      distanceFilter: 5,
+    ),
+  ).listen((Position position) {
+    if (!mounted) return;
+    setState(() {
+      _userPositionMarker = Marker(
+        point: LatLng(position.latitude, position.longitude),
+        width: 50,
+        height: 50,
+        child: Container(
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            border: Border.all(color: Colors.green.shade800, width: 3),
+            color: Colors.transparent,
           ),
-        );
+          child: const Icon(
+            Icons.circle_outlined,
+            color: const Color(0xFF1B5E20),
+            size: 40,
+          ),
+        ),
+      );
 
-        _mapController.move(
-          LatLng(position.latitude, position.longitude),
-          19,
-        );
+      _mapController.move(
+        LatLng(position.latitude, position.longitude),
+        19,
+      );
+    });
+  });
+
+  // دنبال کردن جهت دستگاه (نسخه جدید)
+  _compassStream = FlutterCompass.events?.listen((CompassEvent event) {
+    if (event.heading != null && mounted) {
+      setState(() {
+        _currentBearing = event.heading!;
+        _mapController.rotate(-event.heading!);
       });
-    });
-
-    // دنبال کردن جهت دستگاه
-    _compassStream = FlutterCompass.events?.listen((CompassEvent event) {
-      if (event.heading != null && mounted) {
-        setState(() {
-          _currentBearing = event.heading!;
-          _mapController.rotate(-event.heading!);
-        });
-      }
-    });
-  }
+    }
+  });
+}
 
   void _stopGuidance() {
     _positionStream?.cancel();
@@ -535,61 +573,12 @@ class _NavigationMapScreenState extends State<NavigationMapScreen>
       _isGuidanceMode = false;
       _userPositionMarker = null;
     });
-    _resetNorth();
+    _resetNorth();  // نقشه رو به شمال برگردون
     _showSnackBar("راهنمایی پیمایش متوقف شد", success: true);
   }
 
-  void _startSimulation() {
-  if (_routePolylines.isEmpty || _routePoints.isEmpty) {
-    _showSnackBar("ابتدا یک مسیر رسم کنید!", success: false);
-    return;
-  }
+  // بقیه متدها (openSearchFromFab، enableMapSelectionMode، openRoutingPanel، openAdvancedSearch، searchPoint، build) دقیقاً مثل قبل
 
-  setState(() {
-    _isSimulationMode = true;
-    _isGuidanceMode = true;  // راهبری صوتی هم فعال بشه
-  });
-
-  // شروع راهبری صوتی
-  _guidanceManager = GuidanceManager(
-    mapController: _mapController,
-    onUserMarkerUpdate: (marker) => setState(() => _userPositionMarker = marker),
-    onInstructionUpdate: (instruction, icon) {
-      setState(() {
-        _currentInstruction = instruction;
-        _currentTurnIcon = icon;
-      });
-    },
-    instructions: List<String>.from(_instructions),
-    routePoints: _routePoints,
-  );
-  _guidanceManager!.startGuidance();
-
-  // شروع شبیه‌سازی حرکت روی مسیر
-  _guidanceSimulator = GuidanceSimulator(
-    mapController: _mapController,
-    onUserMarkerUpdate: (marker) => setState(() => _userPositionMarker = marker),
-    routePoints: _routePoints,
-  );
-  _guidanceSimulator!.startSimulation();
-
-  _showSnackBar("شبیه‌سازی مسیر شروع شد! ▶️", success: true);
-}
-
-void _stopSimulation() {
-  _guidanceSimulator?.stopSimulation();
-  _guidanceManager?.stopGuidance();
-
-  setState(() {
-    _isSimulationMode = false;
-    _isGuidanceMode = false;
-    _currentInstruction = "";
-  });
-
-  _resetNorth();
-  _showSnackBar("شبیه‌سازی متوقف شد", success: true);
-}
-  
   void _openSearchFromFab() {
     showGeneralDialog(
       context: context,
@@ -648,6 +637,8 @@ void _stopSimulation() {
   }
 
   void _openRoutingPanel() {
+    
+    // اول هر دیالوگ یا شیت قبلی رو ببند
     if (Navigator.canPop(context)) {
       Navigator.pop(context);
     }
@@ -657,7 +648,7 @@ void _stopSimulation() {
         context: context,
         barrierDismissible: true,
         barrierLabel: "routing_panel",
-        barrierColor: Colors.black.withOpacity(0.3),
+        barrierColor: Colors.black.withOpacity(0.3), // ← تاریکی ملایم، نقشه دیده می‌شه
         transitionDuration: const Duration(milliseconds: 320),
         pageBuilder: (_, __, ___) {
           return Material(
@@ -665,14 +656,15 @@ void _stopSimulation() {
             child: SafeArea(
               child: Align(
                 alignment: Alignment.topCenter,
-                child: Padding(
-                  padding: const EdgeInsets.all(5),
-                  child: SingleChildScrollView(
-                    physics: const BouncingScrollPhysics(),
-                    child: Padding(
-                      padding: EdgeInsets.only(
-                        bottom: MediaQuery.of(context).viewInsets.bottom + 20,
-                      ),
+                
+                  child: Padding(
+                    padding: const EdgeInsets.all(5),
+                    child: SingleChildScrollView(
+                      physics: const BouncingScrollPhysics(),
+                      child: Padding(
+                        padding: EdgeInsets.only(
+                          bottom: MediaQuery.of(context).viewInsets.bottom + 20, // ← این خط کیبورد رو درست می‌کنه
+                        ),
                       child: RoutingTopPanel(
                         originController: _originController,
                         destinationController: _destinationController,
@@ -743,6 +735,7 @@ void _stopSimulation() {
                           setState(() {
                             _originLatLng = location;
                           });
+    
                           _showSnackBar("مبدا از نقشه انتخاب شد", success: true);
                         },
                       ),
@@ -751,8 +744,10 @@ void _stopSimulation() {
                 ),
               ),
             ),
+            
           );
         },
+
         transitionBuilder: (_, animation, __, child) {
           return SlideTransition(
             position: Tween<Offset>(begin: const Offset(0, -1), end: Offset.zero)
@@ -782,7 +777,7 @@ void _stopSimulation() {
             _openSearchFromFab();
           },
           autoSearchCategory: autoSearch,
-          onSelectPlace: _handlePlaceSelected,
+          onSelectPlace: _handlePlaceSelected,  // ← این خط
         ),
       ),
     );
@@ -822,9 +817,160 @@ void _stopSimulation() {
     }
   }
 
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      resizeToAvoidBottomInset: true,
+      body: Stack(
+        children: [
+          FlutterMap(
+            mapController: _mapController,
+            options: MapOptions(
+              initialCenter: const LatLng(35.6892, 51.3890),
+              initialZoom: 12,
+              onTap: (_, p) => _onMapTapped(p),
+            ),
+            children: [
+              TileLayer(
+                urlTemplate: "https://{s}.tile.openstreetmap.de/{z}/{x}/{y}.png",
+                userAgentPackageName: 'tourai.com',
+                //subdomains: const ['a', 'b', 'c'],
+              ),
+              PolylineLayer(polylines: _routePolylines),
+              MarkerLayer(markers: [
+                if (_currentLocationMarker != null) _currentLocationMarker!,
+                ..._waypointMarkers,
+                if (_tempSearchMarker != null) _tempSearchMarker!,
+                if (_userPositionMarker != null) _userPositionMarker!,  // ← جدید: مارکر outline کاربر
+                if (_searchResultMarker != null) _searchResultMarker!,
+              ]),
+            ],
+          ),
+          
+          Positioned(
+            bottom: 20,
+            right: 16,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+// ←←← دکمه جدید باز کردن گوگل مپس
+              FloatingActionButton(
+                heroTag: "fab_google_maps",
+                backgroundColor: Colors.yellowAccent,
+                onPressed: () {
+                  if (_routePoints.isEmpty || _routePoints.length < 2) {
+                    _showSnackBar("ابتدا یک مسیر رسم کنید!", success: false);
+                    return;
+                  }
+
+                  final origin = _routePoints.first;
+                  final destination = _routePoints.last;
+
+                  final googleMapsUrl = "https://www.google.com/maps/dir/?api=1"
+                      "&origin=${origin.latitude},${origin.longitude}"
+                      "&destination=${destination.latitude},${destination.longitude}"
+                      "&travelmode=driving";
+
+                  launchUrl(Uri.parse(googleMapsUrl), mode: LaunchMode.externalApplication);
+                },
+                child: Image.asset(
+                  'assets/images/google_maps_icon.png',  // آیکون گوگل مپس (اختیاری)
+                  width: 30,
+                  height: 30,
+                ),
+                tooltip: "باز کردن در گوگل مپس",
+              ),
+              const SizedBox(height: 12),                // دکمه شروع راهنمایی (فقط وقتی مسیر رسم شده دیده می‌شه)
+              GuidanceFloatingButton(
+                isRouteDrawn: _routePolylines.isNotEmpty,
+                onPressed: () {
+                  if (_isGuidanceMode) {
+                    // توقف راهبری
+                    _guidanceManager?.stopGuidance();
+                    setState(() {
+                      _isGuidanceMode = false;
+                      _currentInstruction = "";
+                    });
+                    _resetNorth();  // نقشه رو صاف کن
+                  } else {
+                    // شروع راهبری
+                    if (_instructions.isEmpty) {
+                      _showSnackBar("ابتدا یک مسیر رسم کنید!", success: false);
+                      return;
+                    }
+
+                    setState(() => _isGuidanceMode = true);
+
+                    _guidanceManager = GuidanceManager(
+                      mapController: _mapController,
+                      onUserMarkerUpdate: (marker) {
+                        setState(() => _userPositionMarker = marker);
+                      },
+                      onInstructionUpdate: (instruction, icon, distance) {
+                        setState(() {
+                          _currentInstruction = instruction;
+                          _currentTurnIcon = icon;
+                          _distanceToNext = distance;
+                        });
+                      },
+                      instructions: List<String>.from(_instructions),  // ← تغییر از maneuvers به instructions
+                      routePoints: _routePoints,
+                    );
+                    _guidanceManager!.startGuidance();
+
+                    // زوم اولیه روی شروع مسیر
+                    if (_routePoints.isNotEmpty) {
+                      _mapController.move(_routePoints.first, 19);
+                    }
+
+                    _showSnackBar("راهبری شروع شد! 🚗", success: true);
+                  }
+                },
+
+              ),
+              const SizedBox(height: 12), // فاصله بین دکمه‌ها
+                FloatingActionButton(
+                  heroTag: "fab_search",
+                  backgroundColor: (_isSearchMinimized || _isRoutingPanelMinimized)
+                      ? (_isSearchMinimized ? Colors.blue : Colors.green)
+                      : Colors.white,
+                  onPressed: () {
+                    if (_isRoutingPanelMinimized) _openRoutingPanel();
+                    else _openSearchFromFab();
+                    setState(() {
+                      _isSearchMinimized = false;
+                      _isRoutingPanelMinimized = false;
+                    });
+                  },
+                  child: Icon(Icons.search,
+                      color: (_isSearchMinimized || _isRoutingPanelMinimized) ? Colors.white : Colors.black87),
+                ),
+                const SizedBox(height: 12),
+                FloatingActionButton.small(
+                  heroTag: "fab_north",
+                  onPressed: _resetNorth,
+                  child: const Icon(Icons.explore),
+                ),
+                const SizedBox(height: 12),
+                FloatingActionButton.small(
+                  heroTag: "fab_locate",
+                  backgroundColor: Colors.blue,
+                  onPressed: () => _getCurrentLocation(force: true),
+                  child: const Icon(Icons.my_location, color: Colors.white),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _handlePlaceSelected(LatLng point, String? name) async {
+    // اول آدرس کامل رو از reverse geocode بگیر
     final String fullAddress = await _getReverseGeocode(point);
 
+    // اگر name وجود داشته باشه، با آدرس ترکیب کن (برای کامل‌تر شدن)
     final String displayText = name?.trim().isNotEmpty == true 
         ? "$name - $fullAddress" 
         : fullAddress;
@@ -852,8 +998,10 @@ void _stopSimulation() {
     _mapController.move(point, 17.5);
     _showSnackBar("مقصد تنظیم شد: $displayText", success: true);
 
+    // جدید: نوشتن آدرس در فیلد جستجو و باز کردن شیت جستجو
     _searchController.text = displayText;
 
+    // باز کردن پنل مسیریابی و جستجو
     Future.delayed(const Duration(milliseconds: 500), () {
       if (!mounted) return;
       if (_isRoutingPanelMinimized || _isSearchMinimized || !Navigator.canPop(context)) {
@@ -863,6 +1011,7 @@ void _stopSimulation() {
           _isSearchMinimized = false;
         });
       } else {
+        // اگر پنل مسیریابی باز باشه، شیت جستجو رو باز کن
         _openSearchFromFab();
       }
     });
@@ -873,6 +1022,7 @@ void _stopSimulation() {
       clipBehavior: Clip.none,
       alignment: Alignment.center,
       children: [
+        // پین اصلی
         const Icon(
           Icons.location_pin,
           color: Colors.deepPurple,
@@ -886,6 +1036,7 @@ void _stopSimulation() {
           ],
         ),
 
+        // لیبل نام مکان بالای پین
         Positioned(
           top: -12,
           child: Container(
@@ -936,192 +1087,7 @@ void _stopSimulation() {
     } catch (e) {
       print("خطا در reverse geocode: $e");
     }
+    // اگر خطا یا ناموجود، مختصات رو برگردون
     return "${point.latitude.toStringAsFixed(6)}, ${point.longitude.toStringAsFixed(6)}";
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      resizeToAvoidBottomInset: true,
-      body: Stack(
-        children: [
-          FlutterMap(
-            mapController: _mapController,
-            options: MapOptions(
-              initialCenter: const LatLng(35.6892, 51.3890),
-              initialZoom: 12,
-              onTap: (_, p) => _onMapTapped(p),
-            ),
-            children: [
-              TileLayer(
-                urlTemplate: "https://{s}.tile.openstreetmap.de/{z}/{x}/{y}.png",
-                userAgentPackageName: 'tourai.com',
-              ),
-              PolylineLayer(polylines: _routePolylines),
-              MarkerLayer(markers: [
-                if (_currentLocationMarker != null) _currentLocationMarker!,
-                ..._waypointMarkers,
-                if (_tempSearchMarker != null) _tempSearchMarker!,
-                if (_userPositionMarker != null) _userPositionMarker!,
-                if (_searchResultMarker != null) _searchResultMarker!,
-              ]),
-            ],
-          ),
-          
-          Positioned(
-            bottom: 20,
-            right: 16,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-
-                // دکمه راهبری
-                // دکمه راهبری — فقط وقتی مسیر رسم شده دیده می‌شه
-                if (_routePolylines.isNotEmpty)
-                  Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      FloatingActionButton.small(
-                        heroTag: "fab_guidance",
-                        backgroundColor: _isGuidanceMode ? Colors.orange.shade700 : Colors.orange.shade600,
-                        foregroundColor: Colors.white,
-                        onPressed: () {
-                          if (_isGuidanceMode) {
-                            // توقف راهبری
-                            _guidanceManager?.stopGuidance();
-                            setState(() {
-                              _isGuidanceMode = false;
-                              _currentInstruction = "";
-                            });
-                            _resetNorth();
-                            _showSnackBar("راهبری متوقف شد", success: true);
-                          } else {
-                            // شروع راهبری
-                            if (_instructions.isEmpty) {
-                              _showSnackBar("دستورات راهبری در دسترس نیست", success: false);
-                              return;
-                            }
-
-                            setState(() => _isGuidanceMode = true);
-
-                            _guidanceManager = GuidanceManager(
-                              mapController: _mapController,
-                              onUserMarkerUpdate: (marker) => setState(() => _userPositionMarker = marker),
-                              onInstructionUpdate: (instruction, icon) {
-                                setState(() {
-                                  _currentInstruction = instruction;
-                                  _currentTurnIcon = icon;
-                                });
-                              },
-                              instructions: _instructions,
-                              routePoints: _routePoints,
-                            );
-                            _guidanceManager!.startGuidance();
-
-                            if (_routePoints.isNotEmpty) {
-                              _mapController.move(_routePoints.first, 19);
-                            }
-
-                            _showSnackBar("راهبری شروع شد! 🚗", success: true);
-                          }
-                        },
-                        child: Icon(
-                          _isGuidanceMode ? Icons.stop : Icons.navigation,
-                          size: 32,
-                        ),
-                        tooltip: _isGuidanceMode ? "توقف راهبری" : "شروع راهبری",
-                      ),
-                      const SizedBox(height: 12),
-                      // ←←← دکمه شبیه‌سازی راهبری
-                      FloatingActionButton.small(
-                          heroTag: "fab_simulate",
-                          backgroundColor: Colors.blue.shade700,
-                          onPressed: _routePolylines.isEmpty
-                              ? null
-                              : () {
-                                  if (_isSimulationMode) {
-                                    _stopSimulation();
-                                  } else {
-                                    _startSimulation();
-                                  }
-                                },
-                          child: Icon(
-                            _isSimulationMode ? Icons.stop : Icons.play_arrow,
-                            color: Colors.white,
-                            size: 32,
-                          ),
-                          tooltip: _isSimulationMode ? "توقف شبیه‌سازی" : "شروع شبیه‌سازی مسیر",
-                        ),
-                      const SizedBox(height: 10),
-
-                    ],
-                  ),
-
-                // دکمه گوگل مپس
-                FloatingActionButton.small(
-                  heroTag: "fab_google_maps",
-                  backgroundColor: Colors.yellowAccent,
-                  onPressed: () {
-                    if (_routePoints.isEmpty || _routePoints.length < 2) {
-                      _showSnackBar("ابتدا یک مسیر رسم کنید!", success: false);
-                      return;
-                    }
-
-                    final origin = _routePoints.first;
-                    final destination = _routePoints.last;
-
-                    final googleMapsUrl = "https://www.google.com/maps/dir/?api=1"
-                        "&origin=${origin.latitude},${origin.longitude}"
-                        "&destination=${destination.latitude},${destination.longitude}"
-                        "&travelmode=driving";
-
-                    launchUrl(Uri.parse(googleMapsUrl), mode: LaunchMode.externalApplication);
-                  },
-                  child: Image.asset(
-                    'assets/images/google_maps_icon.png',
-                    width: 30,
-                    height: 30,
-                  ),
-                  tooltip: "باز کردن در گوگل مپس",
-                ),
-                const SizedBox(height: 10),
-
-                FloatingActionButton.small(
-                  heroTag: "fab_search",
-                  backgroundColor: (_isSearchMinimized || _isRoutingPanelMinimized)
-                      ? (_isSearchMinimized ? Colors.blue : Colors.green)
-                      : Colors.white,
-                  onPressed: () {
-                    if (_isRoutingPanelMinimized) _openRoutingPanel();
-                    else _openSearchFromFab();
-                    setState(() {
-                      _isSearchMinimized = false;
-                      _isRoutingPanelMinimized = false;
-                    });
-                  },
-                  child: Icon(Icons.search,
-                      color: (_isSearchMinimized || _isRoutingPanelMinimized) ? Colors.white : Colors.black87),
-                ),
-                const SizedBox(height: 10),
-                                
-                FloatingActionButton.small(
-                  heroTag: "fab_north",
-                  onPressed: _resetNorth,
-                  child: const Icon(Icons.explore),
-                ),
-                const SizedBox(height: 10),
-
-                FloatingActionButton.small(
-                  heroTag: "fab_locate",
-                  backgroundColor: Colors.blue,
-                  onPressed: () => _getCurrentLocation(force: true),
-                  child: const Icon(Icons.my_location, color: Colors.white),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
   }
 }
