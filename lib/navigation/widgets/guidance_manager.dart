@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:flutter_compass/flutter_compass.dart';
 import 'package:flutter_tts/flutter_tts.dart';
-import 'package:flutter_map/flutter_map.dart';  // فقط این برای LatLng و MapController
+import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'dart:async';
 import 'dart:math' as math;
@@ -11,13 +11,13 @@ import 'dart:math' as math;
 class GuidanceManager {
   final MapController mapController;
   final Function(Marker?) onUserMarkerUpdate;
-  final Function(String instruction, IconData icon) onInstructionUpdate;
-  final List<String> instructions;  // لیست دستورات متنی فارسی/انگلیسی
+  final Function(String instruction, IconData icon, double distance) onInstructionUpdate;
+  final List<Map<String, dynamic>> maneuvers;  // ← درست: لیست map
   final List<LatLng> routePoints;
 
   late FlutterTts _flutterTts;
   bool _isSpeaking = false;
-  int _currentInstructionIndex = 0;
+  int _currentManeuverIndex = 0;
 
   StreamSubscription<Position>? _positionStream;
   StreamSubscription<CompassEvent>? _compassStream;
@@ -26,57 +26,34 @@ class GuidanceManager {
     required this.mapController,
     required this.onUserMarkerUpdate,
     required this.onInstructionUpdate,
-    required this.instructions,
+    required this.maneuvers,
     required this.routePoints,
   }) {
     _initTTS();
   }
 
-  // محاسبه فاصله دستی
-  double _calculateDistance(LatLng p1, LatLng p2) {
-    const double earthRadius = 6371000;
-    double lat1 = p1.latitude * math.pi / 180;
-    double lat2 = p2.latitude * math.pi / 180;
-    double dLat = (p2.latitude - p1.latitude) * math.pi / 180;
-    double dLon = (p2.longitude - p1.longitude) * math.pi / 180;
-
-    double a = math.sin(dLat / 2) * math.sin(dLat / 2) +
-               math.cos(lat1) * math.cos(lat2) *
-               math.sin(dLon / 2) * math.sin(dLon / 2);
-    double c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a));
-    return earthRadius * c;
-  }
-
   void _initTTS() async {
     _flutterTts = FlutterTts();
-    await _flutterTts.setLanguage("en-US");  // انگلیسی بهتر می‌خونه متن‌های فعلی
+    await _flutterTts.setLanguage("fa-IR");  // فارسی برای دستورات فارسی
     await _flutterTts.setSpeechRate(0.5);
     await _flutterTts.setVolume(1.0);
     await _flutterTts.setPitch(1.0);
   }
 
-  // تشخیص نوع پیچ از متن دستور (چون type نداریم)
-  IconData _getTurnIconFromText(String instructionText) {
-    final lowerText = instructionText.toLowerCase();
-
-    if (lowerText.contains("right") || lowerText.contains("راست")) {
-      return Icons.turn_right;
-    } else if (lowerText.contains("sharp right") || lowerText.contains("تند راست")) {
-      return Icons.turn_sharp_right;
-    } else if (lowerText.contains("slight right") || lowerText.contains("کمی راست")) {
-      return Icons.turn_slight_right;
-    } else if (lowerText.contains("left") || lowerText.contains("چپ")) {
-      return Icons.turn_left;
-    } else if (lowerText.contains("sharp left") || lowerText.contains("تند چپ")) {
-      return Icons.turn_sharp_left;
-    } else if (lowerText.contains("slight left") || lowerText.contains("کمی چپ")) {
-      return Icons.turn_slight_left;
-    } else if (lowerText.contains("u-turn") || lowerText.contains("دور بزن")) {
-      return lowerText.contains("right") ? Icons.u_turn_right : Icons.u_turn_left;
-    } else if (lowerText.contains("destination") || lowerText.contains("مقصد") || lowerText.contains("your destination")) {
-      return Icons.location_on;
-    } else {
-      return Icons.arrow_upward;
+  IconData _getTurnIcon(int? type) {
+    if (type == null) return Icons.arrow_upward;
+    switch (type) {
+      case 1: return Icons.arrow_upward;
+      case 2: return Icons.turn_slight_right;
+      case 3: return Icons.turn_right;
+      case 4: return Icons.turn_sharp_right;
+      case 5: return Icons.u_turn_right;
+      case 6: return Icons.turn_slight_left;
+      case 7: return Icons.turn_left;
+      case 8: return Icons.turn_sharp_left;
+      case 9: return Icons.u_turn_left;
+      case 18: return Icons.location_on;
+      default: return Icons.arrow_upward;
     }
   }
 
@@ -88,22 +65,23 @@ class GuidanceManager {
   }
 
   void startGuidance() {
-    if (instructions.isEmpty) return;
+    if (maneuvers.isEmpty || routePoints.isEmpty) return;
 
-    _currentInstructionIndex = 0;
+    _currentManeuverIndex = 0;
 
-    // اولین دستور رو فوری نشون بده و بگو
-    String firstInstruction = instructions[0];
-    onInstructionUpdate(firstInstruction, _getTurnIconFromText(firstInstruction));
+    var first = maneuvers[0];
+    String firstInstruction = first['instruction'] ?? "مستقیم بروید";
+    IconData firstIcon = _getTurnIcon(first['type']);
+    double firstDistance = (first['length'] ?? 0).toDouble();
+    onInstructionUpdate(firstInstruction, firstIcon, firstDistance);
     _speak(firstInstruction);
 
-    // دنبال کردن موقعیت کاربر (مارکر و حرکت نقشه)
     _positionStream = Geolocator.getPositionStream(
       locationSettings: const LocationSettings(
         accuracy: LocationAccuracy.high,
         distanceFilter: 5,
       ),
-    ).listen((Position position) {
+    ).listen((Position position) async {
       final LatLng userLatLng = LatLng(position.latitude, position.longitude);
 
       onUserMarkerUpdate(Marker(
@@ -121,26 +99,48 @@ class GuidanceManager {
       ));
 
       mapController.move(userLatLng, 19);
-    });
 
-    // تایمر برای تغییر دستورات (هر 25 ثانیه یک دستور جدید)
-    Timer.periodic(const Duration(seconds: 25), (timer) {
-      if (_currentInstructionIndex >= instructions.length - 1) {
-        // آخرین دستور یا فراتر از آن
-        String finalInstruction = instructions.isNotEmpty ? instructions.last : "رسیدید به مقصد!";
-        onInstructionUpdate(finalInstruction, Icons.location_on);
-        _speak("رسیدید به مقصد!");
-        timer.cancel();
+      if (_currentManeuverIndex >= maneuvers.length - 1) {
         return;
       }
 
-      _currentInstructionIndex++;
-      String nextInstruction = instructions[_currentInstructionIndex];
-      onInstructionUpdate(nextInstruction, _getTurnIconFromText(nextInstruction));
-      _speak(nextInstruction);
+      var current = maneuvers[_currentManeuverIndex];
+      int beginIndex = current['begin_shape_index'] ?? 0;
+      beginIndex = beginIndex.clamp(0, routePoints.length - 1);
+      LatLng triggerPoint = routePoints[beginIndex];
+
+      double distance = calculateDistance(userLatLng, triggerPoint);
+
+      // پیش‌آگهی
+      if (distance < 150 && distance > 50 && _currentManeuverIndex < maneuvers.length - 1) {
+        var next = maneuvers[_currentManeuverIndex + 1];
+        String pre = next['verbal_pre_transition_instruction'] ?? 
+                    "به زودی ${next['instruction'] ?? 'بپیچید'}";
+        if (!_isSpeaking) {
+          await _speak(pre);
+        }
+      }
+
+      // عبور از پیچ
+      if (distance < 30) {
+        _currentManeuverIndex++;
+        if (_currentManeuverIndex < maneuvers.length) {
+          var next = maneuvers[_currentManeuverIndex];
+          String nextInstruction = next['instruction'] ?? "ادامه دهید";
+          IconData nextIcon = _getTurnIcon(next['type']);
+          double nextDistance = (next['length'] ?? 0).toDouble();
+          onInstructionUpdate(nextInstruction, nextIcon, nextDistance);
+          await _speak(nextInstruction);
+        }
+      }
+
+      // مقصد
+      if (_currentManeuverIndex >= maneuvers.length - 1) {
+        onInstructionUpdate("رسیدید به مقصد!", Icons.location_on, 0);
+        await _speak("رسیدید به مقصد!");
+      }
     });
 
-    // چرخش نقشه بر اساس جهت گوشی
     _compassStream = FlutterCompass.events?.listen((CompassEvent event) {
       if (event.heading != null) {
         mapController.rotate(-event.heading!);
@@ -153,10 +153,86 @@ class GuidanceManager {
     _compassStream?.cancel();
     _flutterTts.stop();
     onUserMarkerUpdate(null);
-    onInstructionUpdate("راهبری متوقف شد", Icons.directions);
+    onInstructionUpdate("راهبری متوقف شد", Icons.directions, 0);
   }
 
   void dispose() {
     stopGuidance();
   }
+
+  double calculateDistance(LatLng p1, LatLng p2) {  // حذف _
+  const double earthRadius = 6371000;
+  double lat1 = p1.latitude * math.pi / 180;
+  double lat2 = p2.latitude * math.pi / 180;
+  double dLat = (p2.latitude - p1.latitude) * math.pi / 180;
+  double dLon = (p2.longitude - p1.longitude) * math.pi / 180;
+
+  double a = math.sin(dLat / 2) * math.sin(dLat / 2) +
+             math.cos(lat1) * math.cos(lat2) *
+             math.sin(dLon / 2) * math.sin(dLon / 2);
+  double c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a));
+  return earthRadius * c;
+}
+
+void updateUserPosition(LatLng position) {
+  // این متد موقعیت رو مثل GPS واقعی پردازش می‌کنه
+  // تمام منطق داخل listen رو اینجا کپی کن (بدون stream)
+
+  // آپدیت مارکر
+  onUserMarkerUpdate(Marker(
+    point: position,
+    width: 50,
+    height: 50,
+    child: Container(
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        border: Border.all(color: Colors.green.shade800, width: 3),
+        color: Colors.transparent,
+      ),
+      child: const Icon(Icons.circle_outlined, color: Colors.green, size: 40),
+    ),
+  ));
+
+  mapController.move(position, 19);
+
+  if (_currentManeuverIndex >= maneuvers.length - 1) {
+    return;
+  }
+
+  var current = maneuvers[_currentManeuverIndex];
+  int beginIndex = current['begin_shape_index'] ?? 0;
+  beginIndex = beginIndex.clamp(0, routePoints.length - 1);
+  LatLng triggerPoint = routePoints[beginIndex];
+
+  double distance = calculateDistance(position, triggerPoint);
+
+  // پیش‌آگهی
+  if (distance < 150 && distance > 50 && _currentManeuverIndex < maneuvers.length - 1) {
+    var next = maneuvers[_currentManeuverIndex + 1];
+    String pre = next['verbal_pre_transition_instruction'] ?? 
+                "به زودی ${next['instruction'] ?? 'بپیچید'}";
+    if (!_isSpeaking) {
+      _speak(pre);
+    }
+  }
+
+  // عبور از پیچ
+  if (distance < 30) {
+    _currentManeuverIndex++;
+    if (_currentManeuverIndex < maneuvers.length) {
+      var next = maneuvers[_currentManeuverIndex];
+      String nextInstruction = next['instruction'] ?? "ادامه دهید";
+      IconData nextIcon = _getTurnIcon(next['type']);
+      double nextDistance = (next['length'] ?? 0).toDouble();
+      onInstructionUpdate(nextInstruction, nextIcon, nextDistance);
+      _speak(nextInstruction);
+    }
+  }
+
+  // مقصد
+  if (_currentManeuverIndex >= maneuvers.length - 1) {
+    onInstructionUpdate("رسیدید به مقصد!", Icons.location_on, 0);
+    _speak("رسیدید به مقصد!");
+  }
+}
 }

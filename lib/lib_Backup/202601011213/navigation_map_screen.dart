@@ -86,11 +86,9 @@ class _NavigationMapScreenState extends State<NavigationMapScreen>
   GuidanceSimulator? _guidanceSimulator;
   String _currentInstruction = "";
   IconData _currentTurnIcon = Icons.arrow_upward;
-  double _currentDistance = 0.0;
   double _distanceToNext = 0.0;
 
-
-  List<Map<String, dynamic>> _maneuvers = [];
+  List<String> _instructions = [];  // ← تغییر به List<String>
   List<LatLng> _routePoints = [];
 
   String? _searchResultPlaceName;
@@ -383,7 +381,6 @@ class _NavigationMapScreenState extends State<NavigationMapScreen>
       final res = await http.get(url).timeout(const Duration(seconds: 40));
       if (res.statusCode == 200) {
         final data = json.decode(res.body);
-        print("پاسخ سرور: $data");
         
         if (data['success'] == true) {
           List<Polyline> lines = [];
@@ -453,18 +450,16 @@ class _NavigationMapScreenState extends State<NavigationMapScreen>
             );
           }).toList();
 
-          setState(() {ff
+          setState(() {
             _routePolylines = lines;
             _waypointMarkers = markers;
 
-            _maneuvers = (route['maneuvers'] as List?)
-            ?.map((m) => m as Map<String, dynamic>)
-            .toList() ?? [];  // ← درست شده
+            _instructions = List<String>.from(route['instructions'] ?? []);  // ← درست شده
 
             _routePoints = points;
 
-            if (_maneuvers.isNotEmpty) {
-              _currentInstruction = _maneuvers[0]['instruction'] ?? "مستقیم بروید";
+            if (_instructions.isNotEmpty) {
+              _currentInstruction = _instructions[0];
               _currentTurnIcon = Icons.arrow_upward;
             } else {
               _currentInstruction = "در حال حرکت";
@@ -545,62 +540,55 @@ class _NavigationMapScreenState extends State<NavigationMapScreen>
   }
 
   void _startSimulation() {
-    if (_routePolylines.isEmpty || _routePoints.isEmpty) {
-      _showSnackBar("ابتدا یک مسیر رسم کنید!", success: false);
-      return;
-    }
-
-    setState(() {
-      _isSimulationMode = true;
-      _isGuidanceMode = true;
-    });
-
-    // فقط GuidanceManager رو یک بار بساز (بدون startGuidance)
-    _guidanceManager = GuidanceManager(
-      mapController: _mapController,
-      onUserMarkerUpdate: (marker) => setState(() => _userPositionMarker = marker),
-      onInstructionUpdate: (instruction, icon, distance) {
-        setState(() {
-          _currentInstruction = instruction;
-          _currentTurnIcon = icon;
-          _distanceToNext = distance;  // ← درست شده
-        });
-      },
-      maneuvers: _maneuvers,
-      routePoints: _routePoints,
-    );
-
-    // شبیه‌سازی حرکت — موقعیت رو به GuidanceManager بفرست
-    _guidanceSimulator = GuidanceSimulator(
-      mapController: _mapController,
-      onUserMarkerUpdate: (marker) => setState(() => _userPositionMarker = marker),
-      routePoints: _routePoints,
-      onPositionUpdate: (position) {
-        // موقعیت شبیه‌سازی شده رو به GuidanceManager بده
-        _guidanceManager?.updateUserPosition(position);
-      },
-    );
-
-    _guidanceSimulator!.startSimulation(
-      stepDuration: const Duration(milliseconds: 1000),  // سرعت طبیعی
-    );
-
-    _showSnackBar("شبیه‌سازی مسیر شروع شد! ▶️", success: true);
+  if (_routePolylines.isEmpty || _routePoints.isEmpty) {
+    _showSnackBar("ابتدا یک مسیر رسم کنید!", success: false);
+    return;
   }
 
-  void _stopSimulation() {
-    _guidanceSimulator?.stopSimulation();
-    _guidanceManager?.stopGuidance();
+  setState(() {
+    _isSimulationMode = true;
+    _isGuidanceMode = true;  // راهبری صوتی هم فعال بشه
+  });
 
-    setState(() {
-      _isSimulationMode = false;
-      _isGuidanceMode = false;
-      _currentInstruction = "";
-    });
+  // شروع راهبری صوتی
+  _guidanceManager = GuidanceManager(
+    mapController: _mapController,
+    onUserMarkerUpdate: (marker) => setState(() => _userPositionMarker = marker),
+    onInstructionUpdate: (instruction, icon) {
+      setState(() {
+        _currentInstruction = instruction;
+        _currentTurnIcon = icon;
+      });
+    },
+    instructions: List<String>.from(_instructions),
+    routePoints: _routePoints,
+  );
+  _guidanceManager!.startGuidance();
 
-    _resetNorth();
-    _showSnackBar("شبیه‌سازی متوقف شد", success: true);
-  }
+  // شروع شبیه‌سازی حرکت روی مسیر
+  _guidanceSimulator = GuidanceSimulator(
+    mapController: _mapController,
+    onUserMarkerUpdate: (marker) => setState(() => _userPositionMarker = marker),
+    routePoints: _routePoints,
+  );
+  _guidanceSimulator!.startSimulation();
+
+  _showSnackBar("شبیه‌سازی مسیر شروع شد! ▶️", success: true);
+}
+
+void _stopSimulation() {
+  _guidanceSimulator?.stopSimulation();
+  _guidanceManager?.stopGuidance();
+
+  setState(() {
+    _isSimulationMode = false;
+    _isGuidanceMode = false;
+    _currentInstruction = "";
+  });
+
+  _resetNorth();
+  _showSnackBar("شبیه‌سازی متوقف شد", success: true);
+}
   
   void _openSearchFromFab() {
     showGeneralDialog(
@@ -999,36 +987,36 @@ class _NavigationMapScreenState extends State<NavigationMapScreen>
                         foregroundColor: Colors.white,
                         onPressed: () {
                           if (_isGuidanceMode) {
+                            // توقف راهبری
                             _guidanceManager?.stopGuidance();
                             setState(() {
                               _isGuidanceMode = false;
                               _currentInstruction = "";
                             });
                             _resetNorth();
+                            _showSnackBar("راهبری متوقف شد", success: true);
                           } else {
-                            if (_routePolylines.isEmpty) {
-                              _showSnackBar("ابتدا یک مسیر رسم کنید!", success: false);
+                            // شروع راهبری
+                            if (_instructions.isEmpty) {
+                              _showSnackBar("دستورات راهبری در دسترس نیست", success: false);
                               return;
                             }
 
                             setState(() => _isGuidanceMode = true);
 
-                            // ←←← فقط اینا رو پاس بده
                             _guidanceManager = GuidanceManager(
                               mapController: _mapController,
                               onUserMarkerUpdate: (marker) => setState(() => _userPositionMarker = marker),
-                              onInstructionUpdate: (instruction, icon, distance) {
+                              onInstructionUpdate: (instruction, icon) {
                                 setState(() {
                                   _currentInstruction = instruction;
                                   _currentTurnIcon = icon;
-                                  _currentDistance = distance;
                                 });
                               },
-                              maneuvers: _maneuvers,  // لیست دستورات از navigation_map_screen
-                              routePoints: _routePoints,    // نقاط مسیر
+                              instructions: _instructions,
+                              routePoints: _routePoints,
                             );
-
-                            _guidanceManager!.startGuidance();  // فقط این رو صدا بزن
+                            _guidanceManager!.startGuidance();
 
                             if (_routePoints.isNotEmpty) {
                               _mapController.move(_routePoints.first, 19);

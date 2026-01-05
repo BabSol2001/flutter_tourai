@@ -8,7 +8,7 @@ class GuidanceSimulator {
   final MapController mapController;
   final Function(Marker?) onUserMarkerUpdate;
   final List<LatLng> routePoints;
-  final Function(LatLng position) onPositionUpdate;  // ← جدید: موقعیت رو به GuidanceManager بده
+
 
   Timer? _simulationTimer;
   int _currentPointIndex = 0;
@@ -18,20 +18,19 @@ class GuidanceSimulator {
     required this.mapController,
     required this.onUserMarkerUpdate,
     required this.routePoints,
-    required this.onPositionUpdate,
   });
 
-  void startSimulation({Duration stepDuration = const Duration(milliseconds: 800)}) {
+  void startSimulation() {
     if (routePoints.isEmpty || _isRunning) return;
 
     _isRunning = true;
     _currentPointIndex = 0;
 
-    final LatLng startPosition = routePoints[0];
-    _updateMarker(startPosition);
-    onPositionUpdate(startPosition);  // موقعیت اولیه رو بفرست
+    // مارکر موقعیت از نقطه اول شروع کن
+    _updateMarker(routePoints[0]);
 
-    _simulationTimer = Timer.periodic(stepDuration, (timer) {
+    // هر 500 میلی‌ثانیه یک نقطه جلو برو (سرعت قابل تنظیم)
+    _simulationTimer = Timer.periodic(const Duration(milliseconds: 500), (timer) {
       if (_currentPointIndex >= routePoints.length - 1) {
         stopSimulation();
         return;
@@ -42,7 +41,6 @@ class GuidanceSimulator {
 
       _updateMarker(currentPosition);
       mapController.move(currentPosition, 19);
-      onPositionUpdate(currentPosition);  // ← موقعیت جدید رو به GuidanceManager بفرست
     });
   }
 
@@ -65,7 +63,7 @@ class GuidanceSimulator {
   void stopSimulation() {
     _simulationTimer?.cancel();
     _isRunning = false;
-    onUserMarkerUpdate(null);
+    onUserMarkerUpdate(null);  // مارکر رو پاک کن
   }
 
   bool get isRunning => _isRunning;
