@@ -14,13 +14,10 @@ class GuidanceManager {
   final Function(String instruction, IconData icon, double distance) onInstructionUpdate;
   final List<Map<String, dynamic>> maneuvers;  // ← درست: لیست map
   final List<LatLng> routePoints;
-  final String vehicleMode;
-  
 
   late FlutterTts _flutterTts;
   bool _isSpeaking = false;
   int _currentManeuverIndex = 0;
-  int _lastSpokenManeuverIndex = -1;  // ← جدید: آخرین دستوری که صدا زده شده
 
   StreamSubscription<Position>? _positionStream;
   StreamSubscription<CompassEvent>? _compassStream;
@@ -31,29 +28,9 @@ class GuidanceManager {
     required this.onInstructionUpdate,
     required this.maneuvers,
     required this.routePoints,
-    required this.vehicleMode,
   }) {
     _initTTS();
   }
-
-  Map<String, dynamic> _getGuidanceDistances() {
-    switch (vehicleMode) {
-      case "pedestrian":
-        return {"pre": 80.0, "main": 30.0};     // پیاده: نزدیک
-      case "bicycle":
-        return {"pre": 150.0, "main": 50.0};    // دوچرخه: متوسط
-      case "motorcycle":
-      case "auto":
-        return {"pre": 400.0, "main": 100.0};   // ماشین/موتور: بیشتر
-      case "truck":
-        return {"pre": 800.0, "main": 200.0};   // کامیون/اتوبان: خیلی زود
-      default:
-        return {"pre": 300.0, "main": 80.0};
-    }
-  }
-
-
-
 
   void _initTTS() async {
     _flutterTts = FlutterTts();
@@ -61,23 +38,6 @@ class GuidanceManager {
     await _flutterTts.setSpeechRate(0.5);
     await _flutterTts.setVolume(1.0);
     await _flutterTts.setPitch(1.0);
-  }
-
-  IconData _getVehicleIcon() {
-    switch (vehicleMode) {
-      case "auto":
-        return Icons.directions_car_outlined;
-      case "truck":
-        return Icons.local_shipping_outlined;
-      case "motorcycle":
-        return Icons.motorcycle_outlined;
-      case "bicycle":
-        return Icons.directions_bike_outlined;
-      case "pedestrian":
-        return Icons.directions_walk_outlined;
-      default:
-        return Icons.directions_car_outlined;
-    }
   }
 
   IconData _getTurnIcon(int? type) {
@@ -97,16 +57,11 @@ class GuidanceManager {
     }
   }
 
-  void _speak(String text) {
-    if (_isSpeaking) {
-      _flutterTts.stop();
-    }
+  Future<void> _speak(String text) async {
+    if (_isSpeaking) await _flutterTts.stop();
     _isSpeaking = true;
-    _flutterTts.speak(text).then((_) {
-      _isSpeaking = false;
-    }).catchError((error) {
-      _isSpeaking = false;
-    });
+    await _flutterTts.speak(text);
+    _flutterTts.completionHandler = () => _isSpeaking = false;
   }
 
   void startGuidance() {
@@ -162,7 +117,7 @@ class GuidanceManager {
         String pre = next['verbal_pre_transition_instruction'] ?? 
                     "به زودی ${next['instruction'] ?? 'بپیچید'}";
         if (!_isSpeaking) {
-          _speak(pre);
+          await _speak(pre);
         }
       }
 
@@ -175,14 +130,14 @@ class GuidanceManager {
           IconData nextIcon = _getTurnIcon(next['type']);
           double nextDistance = (next['length'] ?? 0).toDouble();
           onInstructionUpdate(nextInstruction, nextIcon, nextDistance);
-          _speak(nextInstruction);
+          await _speak(nextInstruction);
         }
       }
 
       // مقصد
       if (_currentManeuverIndex >= maneuvers.length - 1) {
         onInstructionUpdate("رسیدید به مقصد!", Icons.location_on, 0);
-        _speak("رسیدید به مقصد!");
+        await _speak("رسیدید به مقصد!");
       }
     });
 
@@ -223,10 +178,6 @@ void updateUserPosition(LatLng position) {
   // این متد موقعیت رو مثل GPS واقعی پردازش می‌کنه
   // تمام منطق داخل listen رو اینجا کپی کن (بدون stream)
 
-final distances = _getGuidanceDistances();
-final double preDistance = distances['pre']!;   // پیش‌آگهی
-final double mainDistance = distances['main']!; // دستور اصلی
-
   // آپدیت مارکر
   onUserMarkerUpdate(Marker(
     point: position,
@@ -235,27 +186,10 @@ final double mainDistance = distances['main']!; // دستور اصلی
     child: Container(
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        border: Border.all(color: Colors.red, width: 5),
+        border: Border.all(color: Colors.green.shade800, width: 3),
         color: Colors.transparent,
       ),
-
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              Icon(
-                _getVehicleIcon(),  // ← اینجا عوض شد
-                color: Colors.black,
-                size: 30,
-                shadows: const [
-              Shadow(
-                color: Color.fromRGBO(0, 0, 0, 0.6),
-                blurRadius: 4,
-                offset: Offset(0, 2),
-              ),
-            ],
-          ),
-        ],
-      ),
+      child: const Icon(Icons.circle_outlined, color: Colors.green, size: 40),
     ),
   ));
 
@@ -273,48 +207,25 @@ final double mainDistance = distances['main']!; // دستور اصلی
   double distance = calculateDistance(position, triggerPoint);
 
   // پیش‌آگهی
-  if (distance < preDistance && distance > mainDistance && _currentManeuverIndex + 1 < maneuvers.length) {
-    int nextIndex = _currentManeuverIndex + 1;
-    if (_lastSpokenManeuverIndex < nextIndex) {  // فقط اگر قبلاً نگفته باشیم
-      var next = maneuvers[nextIndex];
-      String pre = next['verbal_pre_transition_instruction'] ?? 
-                  "به زودی ${next['instruction'] ?? 'بپیچید'}";
-
-      String distanceText = distance > 1000 
-          ? "${(distance / 1000).toStringAsFixed(1)} کیلومتر"
-          : "${distance.toStringAsFixed(0)} متر";
-
-      _speak("در $distanceText آینده $pre");
-      _lastSpokenManeuverIndex = nextIndex;  // علامت بزن که گفته شد
+  if (distance < 150 && distance > 50 && _currentManeuverIndex < maneuvers.length - 1) {
+    var next = maneuvers[_currentManeuverIndex + 1];
+    String pre = next['verbal_pre_transition_instruction'] ?? 
+                "به زودی ${next['instruction'] ?? 'بپیچید'}";
+    if (!_isSpeaking) {
+      _speak(pre);
     }
   }
 
-  // دستور اصلی
-  if (distance < mainDistance) {
-    if (_lastSpokenManeuverIndex <= _currentManeuverIndex) {  // فقط اگر قبلاً نگفته باشیم
-      var current = maneuvers[_currentManeuverIndex];
-      String instruction = current['instruction'] ?? "ادامه دهید";
-
-      String remainingText = distance > 1000 
-          ? "${(distance / 1000).toStringAsFixed(1)} کیلومتر"
-          : "${distance.toStringAsFixed(0)} متر";
-
-      String speakText = distance < 50 
-          ? instruction 
-          : "$remainingText دیگر $instruction";
-
-      _speak(speakText);
-      _lastSpokenManeuverIndex = _currentManeuverIndex;
-    }
-
-    // عبور از پیچ (بعد از گفتن دستور، اندیس رو افزایش بده)
+  // عبور از پیچ
+  if (distance < 30) {
     _currentManeuverIndex++;
     if (_currentManeuverIndex < maneuvers.length) {
       var next = maneuvers[_currentManeuverIndex];
-      String nextInstruction = next['instruction'] ?? "مستقیم بروید";
+      String nextInstruction = next['instruction'] ?? "ادامه دهید";
       IconData nextIcon = _getTurnIcon(next['type']);
-      double nextLength = (next['length'] ?? 0).toDouble();
-      onInstructionUpdate(nextInstruction, nextIcon, nextLength);
+      double nextDistance = (next['length'] ?? 0).toDouble();
+      onInstructionUpdate(nextInstruction, nextIcon, nextDistance);
+      _speak(nextInstruction);
     }
   }
 

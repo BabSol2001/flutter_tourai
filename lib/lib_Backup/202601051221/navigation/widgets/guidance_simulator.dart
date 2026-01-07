@@ -21,7 +21,7 @@ class GuidanceSimulator {
     required this.onPositionUpdate,
   });
 
-  void startSimulation({Duration stepDuration = const Duration(milliseconds: 5500)}) {
+  void startSimulation({Duration stepDuration = const Duration(milliseconds: 800)}) {
     if (routePoints.isEmpty || _isRunning) return;
 
     _isRunning = true;

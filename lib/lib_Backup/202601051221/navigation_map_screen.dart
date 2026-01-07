@@ -16,7 +16,6 @@ import 'navigation/widgets/search_sheet.dart';
 import 'navigation/widgets/guidance_button.dart';
 import 'navigation/widgets/guidance_manager.dart';
 import 'navigation/widgets/guidance_simulator.dart';
-import 'navigation/widgets/traffic_sign_indicator.dart';
 
 class NavigationMapScreen extends StatefulWidget {
   final bool isDarkMode;
@@ -56,9 +55,6 @@ class _NavigationMapScreenState extends State<NavigationMapScreen>
   String _selectedEngine = "valhalla";
   String _selectedMode = "auto";
 
-  String? _currentSignType;
-  String? _currentSignValue;
-
   final ValueNotifier<String> _modeNotifier = ValueNotifier<String>("auto");
   final ValueNotifier<String> _profileNotifier = ValueNotifier<String>("fastest");
 
@@ -97,16 +93,7 @@ class _NavigationMapScreenState extends State<NavigationMapScreen>
   List<Map<String, dynamic>> _maneuvers = [];
   List<LatLng> _routePoints = [];
 
-  List<String> _views = [
-    "https://{s}.tile.openstreetmap.de/{z}/{x}/{y}.png",  // Standard
-    "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",  // Satellite
-    "https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}",  // Terrain
-  ];
-  int _currentViewIndex = 0;
-
   String? _searchResultPlaceName;
-
-  String _tileUrl = "https://{s}.tile.openstreetmap.de/{z}/{x}/{y}.png";  // پیش‌فرض
 
   static const String baseUrl = "http://192.168.0.105:8000";
 
@@ -471,8 +458,8 @@ class _NavigationMapScreenState extends State<NavigationMapScreen>
             _waypointMarkers = markers;
 
             _maneuvers = (route['maneuvers'] as List?)
-              ?.map((m) => m as Map<String, dynamic>)
-              .toList() ?? [];  // ← درست شده
+            ?.map((m) => m as Map<String, dynamic>)
+            .toList() ?? [];  // ← درست شده
 
             _routePoints = points;
 
@@ -487,7 +474,7 @@ class _NavigationMapScreenState extends State<NavigationMapScreen>
 
           _fitRouteToScreen();
         } else {
-          _showSnackBar("مسیر پیدا نشد");
+          _showSnackBar("سرور مسیر پیدا نکرد");
         }
       } else {
         _showSnackBar("خطای سرور: ${res.statusCode}");
@@ -581,8 +568,6 @@ class _NavigationMapScreenState extends State<NavigationMapScreen>
       },
       maneuvers: _maneuvers,
       routePoints: _routePoints,
-      vehicleMode: _selectedMode,  // ← اضافه کن
-
     );
 
     // شبیه‌سازی حرکت — موقعیت رو به GuidanceManager بفرست
@@ -981,10 +966,9 @@ class _NavigationMapScreenState extends State<NavigationMapScreen>
             ),
             children: [
               TileLayer(
-              urlTemplate: _tileUrl,
-              userAgentPackageName: 'tourai.com',
+                urlTemplate: "https://{s}.tile.openstreetmap.de/{z}/{x}/{y}.png",
+                userAgentPackageName: 'tourai.com',
               ),
-
               PolylineLayer(polylines: _routePolylines),
               MarkerLayer(markers: [
                 if (_currentLocationMarker != null) _currentLocationMarker!,
@@ -995,47 +979,6 @@ class _NavigationMapScreenState extends State<NavigationMapScreen>
               ]),
             ],
           ),
-          
-          Positioned(
-            bottom: 100,
-            left: 16,
-            right: 16,
-            child: Material(
-              elevation: 12,
-              borderRadius: BorderRadius.circular(24),
-              color: Colors.black87,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
-                child: Row(
-                  children: [
-                    // آیکون فلش بزرگ
-                    Icon(_currentTurnIcon, color: Colors.white, size: 68),
-
-                    const SizedBox(width: 16),
-
-                    // تابلو راهنمایی (جدید)
-                    TrafficSignIndicator(
-                      signType: _currentSignType,   // ← این متغیر رو بعداً پر می‌کنیم
-                      signValue: _currentSignValue,
-                    ),
-
-                    const SizedBox(width: 24),
-
-                    // متن دستور
-                    Expanded(
-                      child: Text(
-                        _currentInstruction,
-                        style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
-                        textAlign: TextAlign.right,
-                        textDirection: TextDirection.rtl,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-
           
           Positioned(
             bottom: 20,
@@ -1083,7 +1026,6 @@ class _NavigationMapScreenState extends State<NavigationMapScreen>
                               },
                               maneuvers: _maneuvers,  // لیست دستورات از navigation_map_screen
                               routePoints: _routePoints,    // نقاط مسیر
-                              vehicleMode: _selectedMode,  // ← اضافه کن
                             );
 
                             _guidanceManager!.startGuidance();  // فقط این رو صدا بزن
@@ -1127,27 +1069,6 @@ class _NavigationMapScreenState extends State<NavigationMapScreen>
                     ],
                   ),
 
-                FloatingActionButton.small(
-                  heroTag: "fab_layer",
-                  onPressed: _changeMapLayer,
-                  child: const Icon(Icons.layers),
-                  tooltip: "تغییر لایه نقشه",
-                ),
-                const SizedBox(height: 10),          
-          
-                FloatingActionButton.small(
-                  heroTag: "fab_view",
-                  onPressed: () {
-                    setState(() {
-                      _currentViewIndex = (_currentViewIndex + 1) % _views.length;
-                      _tileUrl = _views[_currentViewIndex];
-                    });
-                    _showSnackBar("ویو نقشه تغییر کرد!");
-                  },
-                  child: const Icon(Icons.map),
-                  tooltip: "تغییر ویو نقشه",
-                ),
-                const SizedBox(height: 10),
                 // دکمه گوگل مپس
                 FloatingActionButton.small(
                   heroTag: "fab_google_maps",
@@ -1215,25 +1136,4 @@ class _NavigationMapScreenState extends State<NavigationMapScreen>
       ),
     );
   }
-
-  Future<void> _getOvercrowd(LatLng center, String activity) async {
-    final url = Uri.parse('$baseUrl/api/v1/osm/overcrowd/?lat= ${center.latitude}&lon=${center.longitude}&radius=500&activity=$activity');
-    try {
-      final res = await http.get(url);
-      if (res.statusCode == 200) {
-        final data = json.decode(res.body);
-        _showSnackBar("ازدحام تقریبی برای $activity: ${data['estimation']} نفر");
-      }
-    } catch (e) {
-      _showSnackBar("خطا در گرفتن ازدحام");
-    }
-  }
-
-  void _changeMapLayer() {
-    setState(() {
-      _tileUrl = "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";  // لایه satellite
-    });
-    _showSnackBar("لایه نقشه تغییر کرد!");
-  }
-
 }
