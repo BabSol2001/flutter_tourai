@@ -93,33 +93,22 @@ class _NavigationMapScreenState extends State<NavigationMapScreen>
   double _currentDistance = 0.0;
   double _distanceToNext = 0.0;
 
+
   List<Map<String, dynamic>> _maneuvers = [];
   List<LatLng> _routePoints = [];
 
-  String? _selectedWeatherLayer;  // null یعنی خاموش
-
   List<String> _views = [
-    "https://{s}.tile.openstreetmap.de/{z}/{x}/{y}.png",
-    "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-    "https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}",
+    "https://{s}.tile.openstreetmap.de/{z}/{x}/{y}.png",  // Standard
+    "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",  // Satellite
+    "https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}",  // Terrain
   ];
   int _currentViewIndex = 0;
 
   String? _searchResultPlaceName;
 
-  String _tileUrl = "https://{s}.tile.openstreetmap.de/{z}/{x}/{y}.png";
+  String _tileUrl = "https://{s}.tile.openstreetmap.de/{z}/{x}/{y}.png";  // پیش‌فرض
 
-  List<TileLayer> _overlayLayers = [];
-
-  bool _showCrowdLayer = false;
-  bool _showTrafficSignsLayer = false;
-  bool _showRailwayLayer = false;
-  bool _showPublicTransportLayer = false;
-  bool _showWeatherLayer = false;
-  bool _showBikePathsLayer = false;
-  bool _showPedestrianPathsLayer = false;
-
-  static const String baseUrl = "http://192.168.0.145:8000";
+  static const String baseUrl = "http://192.168.0.105:8000";
 
   final List<Map<String, dynamic>> transportModes = [
     {"mode": "auto", "engine": "valhalla", "name": "ماشین", "icon": Icons.directions_car},
@@ -483,7 +472,7 @@ class _NavigationMapScreenState extends State<NavigationMapScreen>
 
             _maneuvers = (route['maneuvers'] as List?)
               ?.map((m) => m as Map<String, dynamic>)
-              .toList() ?? [];
+              .toList() ?? [];  // ← درست شده
 
             _routePoints = points;
 
@@ -512,6 +501,7 @@ class _NavigationMapScreenState extends State<NavigationMapScreen>
   }
 
   void _startGuidance() {
+    // دنبال کردن موقعیت کاربر
     _positionStream = Geolocator.getPositionStream(
       locationSettings: const LocationSettings(
         accuracy: LocationAccuracy.high,
@@ -545,6 +535,7 @@ class _NavigationMapScreenState extends State<NavigationMapScreen>
       });
     });
 
+    // دنبال کردن جهت دستگاه
     _compassStream = FlutterCompass.events?.listen((CompassEvent event) {
       if (event.heading != null && mounted) {
         setState(() {
@@ -577,6 +568,7 @@ class _NavigationMapScreenState extends State<NavigationMapScreen>
       _isGuidanceMode = true;
     });
 
+    // فقط GuidanceManager رو یک بار بساز (بدون startGuidance)
     _guidanceManager = GuidanceManager(
       mapController: _mapController,
       onUserMarkerUpdate: (marker) => setState(() => _userPositionMarker = marker),
@@ -584,25 +576,28 @@ class _NavigationMapScreenState extends State<NavigationMapScreen>
         setState(() {
           _currentInstruction = instruction;
           _currentTurnIcon = icon;
-          _distanceToNext = distance;
+          _distanceToNext = distance;  // ← درست شده
         });
       },
       maneuvers: _maneuvers,
       routePoints: _routePoints,
-      vehicleMode: _selectedMode,
+      vehicleMode: _selectedMode,  // ← اضافه کن
+
     );
 
+    // شبیه‌سازی حرکت — موقعیت رو به GuidanceManager بفرست
     _guidanceSimulator = GuidanceSimulator(
       mapController: _mapController,
       onUserMarkerUpdate: (marker) => setState(() => _userPositionMarker = marker),
       routePoints: _routePoints,
       onPositionUpdate: (position) {
+        // موقعیت شبیه‌سازی شده رو به GuidanceManager بده
         _guidanceManager?.updateUserPosition(position);
       },
     );
 
     _guidanceSimulator!.startSimulation(
-      stepDuration: const Duration(milliseconds: 1000),
+      stepDuration: const Duration(milliseconds: 1000),  // سرعت طبیعی
     );
 
     _showSnackBar("شبیه‌سازی مسیر شروع شد! ▶️", success: true);
@@ -621,136 +616,7 @@ class _NavigationMapScreenState extends State<NavigationMapScreen>
     _resetNorth();
     _showSnackBar("شبیه‌سازی متوقف شد", success: true);
   }
-
-  void _showLayersMenu() {
-    showModalBottomSheet(
-      context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setStateModal) => ListView(
-          children: [
-            SwitchListTile(
-              title: const Text("ازدحام جمعیت"),
-              value: _showCrowdLayer,
-              onChanged: (val) {
-                setStateModal(() => _showCrowdLayer = val);
-                setState(() => _updateOverlayLayers());
-              },
-            ),
-            SwitchListTile(
-              title: const Text("تابلوهای راهنمایی"),
-              value: _showTrafficSignsLayer,
-              onChanged: (val) {
-                setStateModal(() => _showTrafficSignsLayer = val);
-                setState(() => _updateOverlayLayers());
-              },
-            ),
-            SwitchListTile(
-              title: const Text("راه آهن"),
-              value: _showRailwayLayer,
-              onChanged: (val) {
-                setStateModal(() => _showRailwayLayer = val);
-                setState(() => _updateOverlayLayers());
-              },
-            ),
-            SwitchListTile(
-              title: const Text("حمل و نقل عمومی"),
-              value: _showPublicTransportLayer,
-              onChanged: (val) {
-                setStateModal(() => _showPublicTransportLayer = val);
-                setState(() => _updateOverlayLayers());
-              },
-            ),
-            SwitchListTile(
-              title: const Text("آب و هوا"),
-              value: _showWeatherLayer,
-              onChanged: (val) {
-                setStateModal(() => _showWeatherLayer = val);
-                setState(() => _updateOverlayLayers());
-              },
-            ),
-            SwitchListTile(
-              title: const Text("مسیر دوچرخه"),
-              value: _showBikePathsLayer,
-              onChanged: (val) {
-                setStateModal(() => _showBikePathsLayer = val);
-                setState(() => _updateOverlayLayers());
-              },
-            ),
-            SwitchListTile(
-              title: const Text("مسیر پیاده"),
-              value: _showPedestrianPathsLayer,
-              onChanged: (val) {
-                setStateModal(() => _showPedestrianPathsLayer = val);
-                setState(() => _updateOverlayLayers());
-              },
-            ),
-          
-            
-          
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _updateOverlayLayers() {
-    _overlayLayers.clear();
-
-    print("به‌روزرسانی لایه‌ها شروع شد...");
-
-    if (_showRailwayLayer) {
-      _overlayLayers.add(TileLayer(
-        urlTemplate: "https://tiles.openrailwaymap.org/standard/{z}/{x}/{y}.png",
-      ));
-      print("لایه راه‌آهن اضافه شد");
-    }
-
-    if (_showPublicTransportLayer) {
-      _overlayLayers.add(TileLayer(
-        urlTemplate: "https://tile.memomaps.de/tilegen/{z}/{x}/{y}.png",
-      ));
-      print("لایه حمل و نقل عمومی اضافه شد");
-    }
-
-    if (_showWeatherLayer) {
-      const String apiKey = "b30cea8dbe88001d89eca6d08f10a0cf";
-      const String layerType = "clouds_new"; // می‌تونی به temp_new یا precipitation_new تغییر بدی
-
-      final String weatherUrlTemplate = 
-          "https://tile.openweathermap.org/map/$layerType/{z}/{x}/{y}.png?appid=$apiKey";
-
-      print("لایه آب و هوا فعال شد!");
-      print("نوع لایه: $layerType");
-      print("کلید API: $apiKey");
-      print("الگوی URL کامل: $weatherUrlTemplate");
-
-      _overlayLayers.add(TileLayer(
-        urlTemplate: weatherUrlTemplate,
-      ));
-
-      print("لایه آب و هوا به لیست اضافه شد");
-    }
-
-    if (_showBikePathsLayer) {
-      _overlayLayers.add(TileLayer(
-        urlTemplate: "https://tile.waymarkedtrails.org/cycling/{z}/{x}/{y}.png",
-      ));
-      print("لایه مسیر دوچرخه اضافه شد");
-    }
-
-    if (_showPedestrianPathsLayer) {
-      _overlayLayers.add(TileLayer(
-        urlTemplate: "https://tile.waymarkedtrails.org/hiking/{z}/{x}/{y}.png",
-      ));
-      print("لایه مسیر پیاده اضافه شد");
-    }
-
-    print("به‌روزرسانی لایه‌ها تمام شد. تعداد لایه‌های overlay: ${_overlayLayers.length}");
-    print("----------------------------------------");
-
-    setState(() {});
-  }
-
+  
   void _openSearchFromFab() {
     showGeneralDialog(
       context: context,
@@ -1100,19 +966,6 @@ class _NavigationMapScreenState extends State<NavigationMapScreen>
     return "${point.latitude.toStringAsFixed(6)}, ${point.longitude.toStringAsFixed(6)}";
   }
 
-  Future<void> _getOvercrowd(LatLng center, String activity) async {
-    final url = Uri.parse('$baseUrl/api/v1/osm/overcrowd/?lat=${center.latitude}&lon=${center.longitude}&radius=500&activity=$activity');
-    try {
-      final res = await http.get(url);
-      if (res.statusCode == 200) {
-        final data = json.decode(res.body);
-        _showSnackBar("ازدحام تقریبی برای $activity: ${data['estimation']} نفر");
-      }
-    } catch (e) {
-      _showSnackBar("خطا در گرفتن ازدحام");
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -1128,10 +981,10 @@ class _NavigationMapScreenState extends State<NavigationMapScreen>
             ),
             children: [
               TileLayer(
-                urlTemplate: _tileUrl,
-                userAgentPackageName: 'tourai.com',
+              urlTemplate: _tileUrl,
+              userAgentPackageName: 'tourai.com',
               ),
-              ..._overlayLayers,
+
               PolylineLayer(polylines: _routePolylines),
               MarkerLayer(markers: [
                 if (_currentLocationMarker != null) _currentLocationMarker!,
@@ -1142,7 +995,7 @@ class _NavigationMapScreenState extends State<NavigationMapScreen>
               ]),
             ],
           ),
-
+          
           Positioned(
             bottom: 100,
             left: 16,
@@ -1155,14 +1008,20 @@ class _NavigationMapScreenState extends State<NavigationMapScreen>
                 padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
                 child: Row(
                   children: [
+                    // آیکون فلش بزرگ
                     Icon(_currentTurnIcon, color: Colors.white, size: 68),
+
                     const SizedBox(width: 16),
-                    if (_currentSignType != null)
-                      TrafficSignIndicator(
-                        signType: _currentSignType,
-                        signValue: _currentSignValue,
-                      ),
+
+                    // تابلو راهنمایی (جدید)
+                    TrafficSignIndicator(
+                      signType: _currentSignType,   // ← این متغیر رو بعداً پر می‌کنیم
+                      signValue: _currentSignValue,
+                    ),
+
                     const SizedBox(width: 24),
+
+                    // متن دستور
                     Expanded(
                       child: Text(
                         _currentInstruction,
@@ -1177,12 +1036,16 @@ class _NavigationMapScreenState extends State<NavigationMapScreen>
             ),
           ),
 
+          
           Positioned(
             bottom: 20,
             right: 16,
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
+
+                // دکمه راهبری
+                // دکمه راهبری — فقط وقتی مسیر رسم شده دیده می‌شه
                 if (_routePolylines.isNotEmpty)
                   Column(
                     mainAxisSize: MainAxisSize.min,
@@ -1207,6 +1070,7 @@ class _NavigationMapScreenState extends State<NavigationMapScreen>
 
                             setState(() => _isGuidanceMode = true);
 
+                            // ←←← فقط اینا رو پاس بده
                             _guidanceManager = GuidanceManager(
                               mapController: _mapController,
                               onUserMarkerUpdate: (marker) => setState(() => _userPositionMarker = marker),
@@ -1217,12 +1081,12 @@ class _NavigationMapScreenState extends State<NavigationMapScreen>
                                   _currentDistance = distance;
                                 });
                               },
-                              maneuvers: _maneuvers,
-                              routePoints: _routePoints,
-                              vehicleMode: _selectedMode,
+                              maneuvers: _maneuvers,  // لیست دستورات از navigation_map_screen
+                              routePoints: _routePoints,    // نقاط مسیر
+                              vehicleMode: _selectedMode,  // ← اضافه کن
                             );
 
-                            _guidanceManager!.startGuidance();
+                            _guidanceManager!.startGuidance();  // فقط این رو صدا بزن
 
                             if (_routePoints.isNotEmpty) {
                               _mapController.move(_routePoints.first, 19);
@@ -1238,37 +1102,39 @@ class _NavigationMapScreenState extends State<NavigationMapScreen>
                         tooltip: _isGuidanceMode ? "توقف راهبری" : "شروع راهبری",
                       ),
                       const SizedBox(height: 12),
+                      // ←←← دکمه شبیه‌سازی راهبری
                       FloatingActionButton.small(
-                        heroTag: "fab_simulate",
-                        backgroundColor: Colors.blue.shade700,
-                        onPressed: _routePolylines.isEmpty
-                            ? null
-                            : () {
-                                if (_isSimulationMode) {
-                                  _stopSimulation();
-                                } else {
-                                  _startSimulation();
-                                }
-                              },
-                        child: Icon(
-                          _isSimulationMode ? Icons.stop : Icons.play_arrow,
-                          color: Colors.white,
-                          size: 32,
+                          heroTag: "fab_simulate",
+                          backgroundColor: Colors.blue.shade700,
+                          onPressed: _routePolylines.isEmpty
+                              ? null
+                              : () {
+                                  if (_isSimulationMode) {
+                                    _stopSimulation();
+                                  } else {
+                                    _startSimulation();
+                                  }
+                                },
+                          child: Icon(
+                            _isSimulationMode ? Icons.stop : Icons.play_arrow,
+                            color: Colors.white,
+                            size: 32,
+                          ),
+                          tooltip: _isSimulationMode ? "توقف شبیه‌سازی" : "شروع شبیه‌سازی مسیر",
                         ),
-                        tooltip: _isSimulationMode ? "توقف شبیه‌سازی" : "شروع شبیه‌سازی مسیر",
-                      ),
                       const SizedBox(height: 10),
+
                     ],
                   ),
 
                 FloatingActionButton.small(
-                  heroTag: "fab_layers_menu",
-                  onPressed: _showLayersMenu,
+                  heroTag: "fab_layer",
+                  onPressed: _changeMapLayer,
                   child: const Icon(Icons.layers),
-                  tooltip: "لایه‌های نقشه",
+                  tooltip: "تغییر لایه نقشه",
                 ),
-                const SizedBox(height: 10),
-
+                const SizedBox(height: 10),          
+          
                 FloatingActionButton.small(
                   heroTag: "fab_view",
                   onPressed: () {
@@ -1282,7 +1148,7 @@ class _NavigationMapScreenState extends State<NavigationMapScreen>
                   tooltip: "تغییر ویو نقشه",
                 ),
                 const SizedBox(height: 10),
-
+                // دکمه گوگل مپس
                 FloatingActionButton.small(
                   heroTag: "fab_google_maps",
                   backgroundColor: Colors.yellowAccent,
@@ -1328,7 +1194,7 @@ class _NavigationMapScreenState extends State<NavigationMapScreen>
                       color: (_isSearchMinimized || _isRoutingPanelMinimized) ? Colors.white : Colors.black87),
                 ),
                 const SizedBox(height: 10),
-
+                                
                 FloatingActionButton.small(
                   heroTag: "fab_north",
                   onPressed: _resetNorth,
@@ -1349,4 +1215,25 @@ class _NavigationMapScreenState extends State<NavigationMapScreen>
       ),
     );
   }
+
+  Future<void> _getOvercrowd(LatLng center, String activity) async {
+    final url = Uri.parse('$baseUrl/api/v1/osm/overcrowd/?lat= ${center.latitude}&lon=${center.longitude}&radius=500&activity=$activity');
+    try {
+      final res = await http.get(url);
+      if (res.statusCode == 200) {
+        final data = json.decode(res.body);
+        _showSnackBar("ازدحام تقریبی برای $activity: ${data['estimation']} نفر");
+      }
+    } catch (e) {
+      _showSnackBar("خطا در گرفتن ازدحام");
+    }
+  }
+
+  void _changeMapLayer() {
+    setState(() {
+      _tileUrl = "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";  // لایه satellite
+    });
+    _showSnackBar("لایه نقشه تغییر کرد!");
+  }
+
 }
