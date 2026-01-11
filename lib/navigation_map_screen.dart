@@ -129,6 +129,14 @@ class _NavigationMapScreenState extends State<NavigationMapScreen>
     {"mode": "pedestrian", "engine": "valhalla", "name": "پیاده", "icon": Icons.directions_walk},
   ];
 
+  static const List<Map<String, String>> weatherOptions = [
+    {"value": "", "label": "خاموش"},
+    {"value": "precipitation_new", "label": "بارش (باران/برف)"},
+    {"value": "temp_new", "label": "دما"},
+    {"value": "wind_new", "label": "باد"},
+    {"value": "clouds_new", "label": "ابرها"},
+  ];
+
   final SearchHistoryManager _historyManager = SearchHistoryManager();
 
   @override
@@ -622,6 +630,7 @@ class _NavigationMapScreenState extends State<NavigationMapScreen>
     _showSnackBar("شبیه‌سازی متوقف شد", success: true);
   }
 
+
   void _showLayersMenu() {
     showModalBottomSheet(
       context: context,
@@ -668,6 +677,39 @@ class _NavigationMapScreenState extends State<NavigationMapScreen>
                 setState(() => _updateOverlayLayers());
               },
             ),
+            
+            // ... بقیه سوئیچ‌ها (راه‌آهن، حمل و نقل و ...)
+
+Padding(
+  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+  child: Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      const Text("لایه آب و هوا:", style: TextStyle(fontWeight: FontWeight.bold)),
+      const SizedBox(height: 8),
+      DropdownButton<String?>(
+        value: _selectedWeatherLayer,
+        isExpanded: true,
+        hint: const Text("انتخاب نوع لایه"),
+        items: weatherOptions.map((option) {
+          return DropdownMenuItem<String?>(
+            value: option["value"],
+            child: Text(option["label"]!),
+          );
+        }).toList(),
+        onChanged: (newValue) {
+          setStateModal(() {
+            _selectedWeatherLayer = newValue;
+          });
+          setState(() {
+            _updateOverlayLayers();
+          });
+        },
+      ),
+    ],
+  ),
+),
+            
             SwitchListTile(
               title: const Text("مسیر دوچرخه"),
               value: _showBikePathsLayer,
@@ -684,9 +726,6 @@ class _NavigationMapScreenState extends State<NavigationMapScreen>
                 setState(() => _updateOverlayLayers());
               },
             ),
-          
-            
-          
           ],
         ),
       ),
@@ -713,43 +752,28 @@ class _NavigationMapScreenState extends State<NavigationMapScreen>
     }
 
     if (_showWeatherLayer) {
-      const String apiKey = "b30cea8dbe88001d89eca6d08f10a0cf";
-      const String layerType = "clouds_new"; // می‌تونی به temp_new یا precipitation_new تغییر بدی
+    const String apiKey = "b30cea8dbe88001d89eca6d08f10a0cf";
 
-      final String weatherUrlTemplate = 
-          "https://tile.openweathermap.org/map/$layerType/{z}/{x}/{y}.png?appid=$apiKey";
+    // اگر هنوز چیزی انتخاب نشده (بعید هست چون از بالا تنظیم کردیم)، باز هم پیش‌فرض بگذار
+    final String layerType = _selectedWeatherLayer != null && _selectedWeatherLayer!.isNotEmpty
+        ? _selectedWeatherLayer!
+        : "precipitation";  // پیش‌فرض نهایی
 
-      print("لایه آب و هوا فعال شد!");
-      print("نوع لایه: $layerType");
-      print("کلید API: $apiKey");
-      print("الگوی URL کامل: $weatherUrlTemplate");
+    final String weatherUrl = 
+        "https://tile.openweathermap.org/map/$layerType/{z}/{x}/{y}.png?appid=$apiKey";
 
-      _overlayLayers.add(TileLayer(
-        urlTemplate: weatherUrlTemplate,
-      ));
+    print("لایه آب و هوا فعال شد:");
+    print("   نوع لایه: $layerType");
+    print("   URL کامل: $weatherUrl");
+    print("--------------------------------------------------");
 
-      print("لایه آب و هوا به لیست اضافه شد");
-    }
-
-    if (_showBikePathsLayer) {
-      _overlayLayers.add(TileLayer(
-        urlTemplate: "https://tile.waymarkedtrails.org/cycling/{z}/{x}/{y}.png",
-      ));
-      print("لایه مسیر دوچرخه اضافه شد");
-    }
-
-    if (_showPedestrianPathsLayer) {
-      _overlayLayers.add(TileLayer(
-        urlTemplate: "https://tile.waymarkedtrails.org/hiking/{z}/{x}/{y}.png",
-      ));
-      print("لایه مسیر پیاده اضافه شد");
-    }
-
-    print("به‌روزرسانی لایه‌ها تمام شد. تعداد لایه‌های overlay: ${_overlayLayers.length}");
-    print("----------------------------------------");
-
-    setState(() {});
+    _overlayLayers.add(TileLayer(
+      urlTemplate: weatherUrl,
+    ));
   }
+
+  setState(() {}); // اگر لازم بود UI رو بروز کن
+}
 
   void _openSearchFromFab() {
     showGeneralDialog(
