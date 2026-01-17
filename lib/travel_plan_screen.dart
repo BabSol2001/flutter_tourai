@@ -13,7 +13,7 @@ class TravelPlanScreen extends StatefulWidget {
 }
 
 class _TravelPlanScreenState extends State<TravelPlanScreen> {
-  final dio = Dio(BaseOptions(baseUrl: 'http://10.0.2.2:8000/api/travel/'));
+  final dio = Dio(BaseOptions(baseUrl: 'http://192.168.178.23:8000/api/v1/chatgpt_travel/ai-travelplan/'));
   final _formKey = GlobalKey<FormState>();
 
   String cities = '';
@@ -51,9 +51,16 @@ class _TravelPlanScreenState extends State<TravelPlanScreen> {
   Future<void> _submitForm() async {
     if (!_formKey.currentState!.validate()) return;
 
-    setState(() => isLoading = true);
+    _formKey.currentState!.save();
+
+    setState(() {
+      isLoading = true;
+      chatGptResponse = null;
+      deepSeekResponse = null;
+    });
 
     try {
+      // ۱. ذخیره اطلاعات ورودی
       await dio.post('travelplans/', data: {
         'cities': cities,
         'attraction_type': attractionType,
@@ -64,26 +71,41 @@ class _TravelPlanScreenState extends State<TravelPlanScreen> {
         'additional_notes': additionalNotes,
       });
 
+      // ۲. ساخت پرامپت
       final promptResponse = await dio.post('generate-prompt/', data: {
         'cities': cities,
         'attraction_type': attractionType,
         'duration': duration,
         'vehicle_available': hasVehicle,
         'has_disabled_travelers': hasDisabled,
+        'disabled_details': disabledDetails,
         'additional_notes': additionalNotes,
       });
+      prompt = promptResponse.data['prompt'];
 
-      setState(() => prompt = promptResponse.data['prompt']);
-
-      final aiResponse = await dio.post('ai-travelplan/', data: {'prompt': prompt});
+      // ۳. گرفتن پاسخ‌های هوش مصنوعی
+      final aiResponse = await dio.post('ai-travelplan/', data: {
+        'prompt': prompt,
+      });
 
       setState(() {
         chatGptResponse = aiResponse.data['chatgpt_response'];
         deepSeekResponse = aiResponse.data['deepseek_response'];
       });
+    } on DioException catch (e) {
+      String errorMessage = 'خطا در ارتباط با سرور';
+      if (e.response != null) {
+        errorMessage = 'خطا ${e.response?.statusCode}: ${e.response?.data['error'] ?? 'نامشخص'}';
+      } else if (e.type == DioExceptionType.connectionTimeout) {
+        errorMessage = 'اتصال به سرور زمان‌بر شد';
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(errorMessage), backgroundColor: Colors.red),
+      );
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('خطا: $e')),
+        SnackBar(content: Text('خطای غیرمنتظره: $e'), backgroundColor: Colors.red),
       );
     } finally {
       setState(() => isLoading = false);
@@ -96,191 +118,145 @@ class _TravelPlanScreenState extends State<TravelPlanScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: theme.appBarTheme.backgroundColor,
-        elevation: 0,
-        title: Text(
-          'برنامه‌ریزی سفر با AI',
-          style: TextStyle(fontWeight: FontWeight.bold, color: theme.appBarTheme.foregroundColor),
-        ),
-        centerTitle: true,
+        title: const Text('ساخت برنامه سفر'),
         actions: [
-          PopupMenuButton<String>(
-            icon: Icon(Icons.more_vert, color: theme.appBarTheme.foregroundColor),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            onSelected: (value) {
-              if (value == 'settings') {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => SettingsScreen(
-                      isDarkMode: Theme.of(context).brightness == Brightness.dark,
-                      onThemeChanged: widget.onThemeChanged ?? (v) {},
-                    ),
+          IconButton(
+            icon: const Icon(Icons.settings),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => SettingsScreen(
+                    isDarkMode: Theme.of(context).brightness == Brightness.dark,
+                    onThemeChanged: widget.onThemeChanged ?? (bool isDark) {}, // جلوگیری از null
                   ),
-                );
-              }
+                ),
+              );
             },
-            itemBuilder: (context) => [
-              const PopupMenuItem(
-                value: 'settings',
-                child: Row(children: [Icon(Icons.settings), SizedBox(width: 12), Text('تنظیمات')]),
-              ),
-            ],
           ),
         ],
       ),
-      body: Container(
-        padding: const EdgeInsets.all(16),
+      body: Padding(
+        padding: const EdgeInsets.all(16.0),
         child: Form(
           key: _formKey,
-          child: ListView( // خطا رفع شد
+          child: ListView(
             children: [
-              // شهرها
+              // فیلد شهرها
               TextFormField(
-                decoration: InputDecoration(
-                  labelText: 'شهر مقصد',
-                  hintText: 'مثلاً: شیراز، اصفهان',
-                  filled: true,
-                  fillColor: theme.inputDecorationTheme.fillColor,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide.none,
-                  ),
-                  prefixIcon: const Icon(Icons.location_city, size: 20),
+                decoration: const InputDecoration(
+                  labelText: 'شهرها (مثال: تهران، اصفهان)',
+                  border: OutlineInputBorder(),
                 ),
-                validator: (v) => v!.isEmpty ? 'شهر را وارد کنید' : null,
-                onChanged: (v) => cities = v,
+                onSaved: (value) => cities = value ?? '',
+                validator: (value) => value!.isEmpty ? 'لطفاً شهرها را وارد کنید' : null,
               ),
               const SizedBox(height: 16),
 
               // نوع جاذبه
               DropdownButtonFormField<String>(
                 value: attractionType,
-                decoration: InputDecoration(
-                  labelText: 'نوع جاذبه',
-                  filled: true,
-                  fillColor: theme.inputDecorationTheme.fillColor,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide.none,
-                  ),
-                  prefixIcon: const Icon(Icons.category, size: 20),
+                decoration: const InputDecoration(
+                  labelText: 'نوع جاذبه مورد علاقه',
+                  border: OutlineInputBorder(),
                 ),
-                items: attractionChoices.entries
-                    .map((e) => DropdownMenuItem(value: e.key, child: Text(e.value)))
-                    .toList(),
-                onChanged: (v) => setState(() => attractionType = v!),
+                items: attractionChoices.entries.map((e) {
+                  return DropdownMenuItem(value: e.key, child: Text(e.value));
+                }).toList(),
+                onChanged: (value) => setState(() => attractionType = value!),
               ),
               const SizedBox(height: 16),
 
               // مدت زمان
               DropdownButtonFormField<String>(
                 value: duration,
-                decoration: InputDecoration(
-                  labelText: 'مدت سفر',
-                  filled: true,
-                  fillColor: theme.inputDecorationTheme.fillColor,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide.none,
-                  ),
-                  prefixIcon: const Icon(Icons.access_time, size: 20),
+                decoration: const InputDecoration(
+                  labelText: 'مدت زمان سفر',
+                  border: OutlineInputBorder(),
                 ),
-                items: durationChoices.entries
-                    .map((e) => DropdownMenuItem(value: e.key, child: Text(e.value)))
-                    .toList(),
-                onChanged: (v) => setState(() => duration = v!),
+                items: durationChoices.entries.map((e) {
+                  return DropdownMenuItem(value: e.key, child: Text(e.value));
+                }).toList(),
+                onChanged: (value) => setState(() => duration = value!),
               ),
               const SizedBox(height: 16),
 
               // وسیله نقلیه
               SwitchListTile(
-                title: Row(
-                  children: [
-                    Icon(Icons.directions_car, size: 20, color: AppTheme.primary),
-                    const SizedBox(width: 8),
-                    const Text('وسیله نقلیه دارم'),
-                  ],
-                ),
+                title: const Text('وسیله نقلیه شخصی دارم'),
                 value: hasVehicle,
-                onChanged: (v) => setState(() => hasVehicle = v),
-                activeColor: AppTheme.primary,
+                onChanged: (value) => setState(() => hasVehicle = value),
               ),
 
-              // معلول همراه
+              // مسافر معلول
               SwitchListTile(
-                title: Row(
-                  children: [
-                    Icon(Icons.accessible, size: 20, color: AppTheme.primary),
-                    const SizedBox(width: 8),
-                    const Text('مسافر معلول همراه است'),
-                  ],
-                ),
+                title: const Text('مسافر دارای معلولیت همراه دارم'),
                 value: hasDisabled,
-                onChanged: (v) => setState(() => hasDisabled = v),
-                activeColor: AppTheme.primary,
+                onChanged: (value) => setState(() => hasDisabled = value),
               ),
 
               if (hasDisabled) ...[
-                const SizedBox(height: 8),
                 TextFormField(
-                  decoration: InputDecoration(
+                  decoration: const InputDecoration(
                     labelText: 'جزئیات معلولیت',
-                    filled: true,
-                    fillColor: theme.inputDecorationTheme.fillColor,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide.none,
-                    ),
-                    prefixIcon: const Icon(Icons.info, size: 20),
+                    border: OutlineInputBorder(),
                   ),
                   maxLines: 3,
-                  onChanged: (v) => disabledDetails = v,
+                  onSaved: (value) => disabledDetails = value ?? '',
                 ),
+                const SizedBox(height: 16),
               ],
 
-              const SizedBox(height: 16),
+              // یادداشت اضافی
               TextFormField(
-                decoration: InputDecoration(
-                  labelText: 'یادداشت اضافی',
-                  filled: true,
-                  fillColor: theme.inputDecorationTheme.fillColor,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide.none,
-                  ),
-                  prefixIcon: const Icon(Icons.note, size: 20),
+                decoration: const InputDecoration(
+                  labelText: 'یادداشت یا درخواست ویژه',
+                  border: OutlineInputBorder(),
                 ),
-                maxLines: 3,
-                onChanged: (v) => additionalNotes = v,
+                maxLines: 4,
+                onSaved: (value) => additionalNotes = value ?? '',
               ),
-
               const SizedBox(height: 24),
+
+              // دکمه ارسال
               ElevatedButton.icon(
                 onPressed: isLoading ? null : _submitForm,
                 icon: isLoading
-                    ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          color: Colors.white,
+                          strokeWidth: 2,
+                        ),
+                      )
                     : const Icon(Icons.smart_toy, size: 20),
-                label: const Text('بساز برنامه سفر!', style: TextStyle(fontWeight: FontWeight.bold)),
+                label: const Text('ساخت برنامه سفر', style: TextStyle(fontWeight: FontWeight.bold)),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppTheme.primary,
+                  foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  elevation: 2,
+                  elevation: 4,
                 ),
               ),
 
-              // نتیجه AI
-              if (chatGptResponse != null) ...[
+              // نمایش نتایج هوش مصنوعی
+              if (chatGptResponse != null || deepSeekResponse != null) ...[
                 const SizedBox(height: 32),
                 Text(
-                  'نتیجه هوش مصنوعی',
+                  'نتایج هوش مصنوعی',
                   style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 16),
-                _buildAIResponse('ChatGPT', chatGptResponse!, Colors.blue),
+
+                if (chatGptResponse != null)
+                  _buildAIResponse('ChatGPT', chatGptResponse!, Colors.blue),
+
                 const SizedBox(height: 16),
-                _buildAIResponse('DeepSeek', deepSeekResponse!, Colors.green),
+
+                if (deepSeekResponse != null)
+                  _buildAIResponse('DeepSeek', deepSeekResponse!, Colors.green),
               ],
             ],
           ),

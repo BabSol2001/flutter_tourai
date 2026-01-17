@@ -14,7 +14,6 @@ class SettingsScreen extends StatefulWidget {
 
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
-  
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
