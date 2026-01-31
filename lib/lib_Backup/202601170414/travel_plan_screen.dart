@@ -13,7 +13,7 @@ class TravelPlanScreen extends StatefulWidget {
 }
 
 class _TravelPlanScreenState extends State<TravelPlanScreen> {
-  final dio = Dio(BaseOptions(baseUrl: 'http://192.168.0.105:8000/api/v1/'));
+  final dio = Dio(BaseOptions(baseUrl: 'http://192.168.178.23:8000/api/v1/chatgpt_travel/ai-travelplan/'));
   final _formKey = GlobalKey<FormState>();
 
   String cities = '';
@@ -25,11 +25,9 @@ class _TravelPlanScreenState extends State<TravelPlanScreen> {
   String additionalNotes = '';
 
   bool isLoading = false;
-
-  // لیست پاسخ‌های Groq
-  List<Map<String, String>> groqResponses = [];
-  // لیست پاسخ‌های Fireworks
-  List<Map<String, String>> fireworksResponses = [];
+  String? prompt;
+  String? chatGptResponse;
+  String? deepSeekResponse;
 
   final attractionChoices = {
     'historical': 'تاریخی',
@@ -57,24 +55,13 @@ class _TravelPlanScreenState extends State<TravelPlanScreen> {
 
     setState(() {
       isLoading = true;
-      groqResponses = [];
-      fireworksResponses = [];
+      chatGptResponse = null;
+      deepSeekResponse = null;
     });
 
     try {
-      // ۱. ذخیره ورودی‌ها (اختیاری)
-      await dio.post('chatgpt_travel/travelplans/', data: {
-        'destination_cities': cities,
-        'attraction_types': attractionType,
-        'duration_of_visit': duration,
-        'has_vehicle': hasVehicle,
-        'has_disabled_travelers': hasDisabled,
-        'disabled_details': disabledDetails,
-        'additional_notes': additionalNotes,
-      });
-
-      // ۲. ساخت پرامپت
-      final promptResponse = await dio.post('chatgpt_travel/generate-prompt/', data: {
+      // ۱. ذخیره اطلاعات ورودی
+      await dio.post('travelplans/', data: {
         'cities': cities,
         'attraction_type': attractionType,
         'duration': duration,
@@ -84,64 +71,41 @@ class _TravelPlanScreenState extends State<TravelPlanScreen> {
         'additional_notes': additionalNotes,
       });
 
-      final prompt = promptResponse.data['prompt'] as String?;
-      if (prompt == null || prompt.trim().isEmpty) {
-        throw Exception('پرامپت ساخته نشد');
-      }
+      // ۲. ساخت پرامپت
+      final promptResponse = await dio.post('generate-prompt/', data: {
+        'cities': cities,
+        'attraction_type': attractionType,
+        'duration': duration,
+        'vehicle_available': hasVehicle,
+        'has_disabled_travelers': hasDisabled,
+        'disabled_details': disabledDetails,
+        'additional_notes': additionalNotes,
+      });
+      prompt = promptResponse.data['prompt'];
 
-      print('پرامپت: $prompt');
-
-      // ۳. درخواست به Groq
-      final groqRaw = await dio.post(
-        'groqchat/sessions/1/send-message/',
-        data: {'message': prompt},
-        options: Options(contentType: Headers.jsonContentType),
-      );
-
-      // استخراج Groq
-      final groqList = groqRaw.data['assistant_replies'] as List<dynamic>? ?? [];
-      List<Map<String, String>> tempGroq = [];
-      for (var item in groqList) {
-        final model = item['model'] as String? ?? 'Groq';
-        final content = item['reply']['content'] as String? ?? '';
-        if (content.isNotEmpty) {
-          tempGroq.add({'model': model, 'response': content});
-        }
-      }
-
-      // ۴. درخواست به Fireworks
-      final fwRaw = await dio.post(
-        'fireworkschat/sessions/1/send-message/',
-        data: {'message': prompt},
-        options: Options(contentType: Headers.jsonContentType),
-      );
-
-      // استخراج Fireworks
-      final fwList = fwRaw.data['assistant_replies'] as List<dynamic>? ?? [];
-      List<Map<String, String>> tempFw = [];
-      for (var item in fwList) {
-        final model = item['model'] as String? ?? 'Fireworks';
-        final content = item['reply']['content'] as String? ?? '';
-        if (content.isNotEmpty) {
-          tempFw.add({'model': model, 'response': content});
-        }
-      }
+      // ۳. گرفتن پاسخ‌های هوش مصنوعی
+      final aiResponse = await dio.post('ai-travelplan/', data: {
+        'prompt': prompt,
+      });
 
       setState(() {
-        groqResponses = tempGroq;
-        fireworksResponses = tempFw;
+        chatGptResponse = aiResponse.data['chatgpt_response'];
+        deepSeekResponse = aiResponse.data['deepseek_response'];
       });
     } on DioException catch (e) {
-      String msg = 'خطا در ارتباط با سرور';
+      String errorMessage = 'خطا در ارتباط با سرور';
       if (e.response != null) {
-        msg = 'خطا ${e.response?.statusCode}: ${e.response?.data['error'] ?? 'نامشخص'}';
+        errorMessage = 'خطا ${e.response?.statusCode}: ${e.response?.data['error'] ?? 'نامشخص'}';
+      } else if (e.type == DioExceptionType.connectionTimeout) {
+        errorMessage = 'اتصال به سرور زمان‌بر شد';
       }
+
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(msg), backgroundColor: Colors.red),
+        SnackBar(content: Text(errorMessage), backgroundColor: Colors.red),
       );
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('خطا: $e'), backgroundColor: Colors.red),
+        SnackBar(content: Text('خطای غیرمنتظره: $e'), backgroundColor: Colors.red),
       );
     } finally {
       setState(() => isLoading = false);
@@ -164,7 +128,7 @@ class _TravelPlanScreenState extends State<TravelPlanScreen> {
                 MaterialPageRoute(
                   builder: (context) => SettingsScreen(
                     isDarkMode: Theme.of(context).brightness == Brightness.dark,
-                    onThemeChanged: widget.onThemeChanged ?? (bool isDark) {},
+                    onThemeChanged: widget.onThemeChanged ?? (bool isDark) {}, // جلوگیری از null
                   ),
                 ),
               );
@@ -178,7 +142,7 @@ class _TravelPlanScreenState extends State<TravelPlanScreen> {
           key: _formKey,
           child: ListView(
             children: [
-              // فیلدهای فرم (بدون تغییر)
+              // فیلد شهرها
               TextFormField(
                 decoration: const InputDecoration(
                   labelText: 'شهرها (مثال: تهران، اصفهان)',
@@ -189,34 +153,42 @@ class _TravelPlanScreenState extends State<TravelPlanScreen> {
               ),
               const SizedBox(height: 16),
 
+              // نوع جاذبه
               DropdownButtonFormField<String>(
                 value: attractionType,
                 decoration: const InputDecoration(
                   labelText: 'نوع جاذبه مورد علاقه',
                   border: OutlineInputBorder(),
                 ),
-                items: attractionChoices.entries.map((e) => DropdownMenuItem(value: e.key, child: Text(e.value))).toList(),
+                items: attractionChoices.entries.map((e) {
+                  return DropdownMenuItem(value: e.key, child: Text(e.value));
+                }).toList(),
                 onChanged: (value) => setState(() => attractionType = value!),
               ),
               const SizedBox(height: 16),
 
+              // مدت زمان
               DropdownButtonFormField<String>(
                 value: duration,
                 decoration: const InputDecoration(
                   labelText: 'مدت زمان سفر',
                   border: OutlineInputBorder(),
                 ),
-                items: durationChoices.entries.map((e) => DropdownMenuItem(value: e.key, child: Text(e.value))).toList(),
+                items: durationChoices.entries.map((e) {
+                  return DropdownMenuItem(value: e.key, child: Text(e.value));
+                }).toList(),
                 onChanged: (value) => setState(() => duration = value!),
               ),
               const SizedBox(height: 16),
 
+              // وسیله نقلیه
               SwitchListTile(
                 title: const Text('وسیله نقلیه شخصی دارم'),
                 value: hasVehicle,
                 onChanged: (value) => setState(() => hasVehicle = value),
               ),
 
+              // مسافر معلول
               SwitchListTile(
                 title: const Text('مسافر دارای معلولیت همراه دارم'),
                 value: hasDisabled,
@@ -235,6 +207,7 @@ class _TravelPlanScreenState extends State<TravelPlanScreen> {
                 const SizedBox(height: 16),
               ],
 
+              // یادداشت اضافی
               TextFormField(
                 decoration: const InputDecoration(
                   labelText: 'یادداشت یا درخواست ویژه',
@@ -245,10 +218,18 @@ class _TravelPlanScreenState extends State<TravelPlanScreen> {
               ),
               const SizedBox(height: 24),
 
+              // دکمه ارسال
               ElevatedButton.icon(
                 onPressed: isLoading ? null : _submitForm,
                 icon: isLoading
-                    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          color: Colors.white,
+                          strokeWidth: 2,
+                        ),
+                      )
                     : const Icon(Icons.smart_toy, size: 20),
                 label: const Text('ساخت برنامه سفر', style: TextStyle(fontWeight: FontWeight.bold)),
                 style: ElevatedButton.styleFrom(
@@ -260,84 +241,51 @@ class _TravelPlanScreenState extends State<TravelPlanScreen> {
                 ),
               ),
 
-              // نمایش Groq
-              if (groqResponses.isNotEmpty) ...[
+              // نمایش نتایج هوش مصنوعی
+              if (chatGptResponse != null || deepSeekResponse != null) ...[
                 const SizedBox(height: 32),
                 Text(
-                  'نتایج Groq (${groqResponses.length} مدل)',
+                  'نتایج هوش مصنوعی',
                   style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 16),
-                ...groqResponses.map((res) => Padding(
-                      padding: const EdgeInsets.only(bottom: 16),
-                      child: Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: Colors.purple.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: Colors.purple.withOpacity(0.3)),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                Icon(Icons.smart_toy, color: Colors.purple),
-                                const SizedBox(width: 8),
-                                Text(
-                                  res['model']!,
-                                  style: TextStyle(fontWeight: FontWeight.bold, color: Colors.purple, fontSize: 16),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 12),
-                            SelectableText(res['response']!, style: const TextStyle(fontSize: 14)),
-                          ],
-                        ),
-                      ),
-                    )),
-              ],
 
-              // نمایش Fireworks
-              if (fireworksResponses.isNotEmpty) ...[
-                const SizedBox(height: 32),
-                Text(
-                  'نتایج Fireworks (${fireworksResponses.length} مدل)',
-                  style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
-                ),
+                if (chatGptResponse != null)
+                  _buildAIResponse('ChatGPT', chatGptResponse!, Colors.blue),
+
                 const SizedBox(height: 16),
-                ...fireworksResponses.map((res) => Padding(
-                      padding: const EdgeInsets.only(bottom: 16),
-                      child: Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: Colors.orange.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: Colors.orange.withOpacity(0.3)),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                Icon(Icons.smart_toy, color: Colors.orange),
-                                const SizedBox(width: 8),
-                                Text(
-                                  res['model']!,
-                                  style: TextStyle(fontWeight: FontWeight.bold, color: Colors.orange, fontSize: 16),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 12),
-                            SelectableText(res['response']!, style: const TextStyle(fontSize: 14)),
-                          ],
-                        ),
-                      ),
-                    )),
+
+                if (deepSeekResponse != null)
+                  _buildAIResponse('DeepSeek', deepSeekResponse!, Colors.green),
               ],
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildAIResponse(String title, String response, Color color) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withOpacity(0.3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.smart_toy, color: color),
+              const SizedBox(width: 8),
+              Text(title, style: TextStyle(fontWeight: FontWeight.bold, color: color, fontSize: 16)),
+            ],
+          ),
+          const SizedBox(height: 12),
+          SelectableText(response, style: const TextStyle(fontSize: 14)),
+        ],
       ),
     );
   }
