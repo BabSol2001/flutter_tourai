@@ -190,7 +190,7 @@ class _TravelPlanScreenState extends State<TravelPlanScreen> {
               const SizedBox(height: 16),
 
               DropdownButtonFormField<String>(
-                value: attractionType,
+                initialValue: attractionType,
                 decoration: const InputDecoration(
                   labelText: 'نوع جاذبه مورد علاقه',
                   border: OutlineInputBorder(),
@@ -201,7 +201,7 @@ class _TravelPlanScreenState extends State<TravelPlanScreen> {
               const SizedBox(height: 16),
 
               DropdownButtonFormField<String>(
-                value: duration,
+                initialValue: duration,
                 decoration: const InputDecoration(
                   labelText: 'مدت زمان سفر',
                   border: OutlineInputBorder(),

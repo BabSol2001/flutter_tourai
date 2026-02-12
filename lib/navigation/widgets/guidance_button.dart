@@ -6,10 +6,10 @@ class GuidanceFloatingButton extends StatelessWidget {
   final VoidCallback onPressed; // وقتی دکمه زده شد
 
   const GuidanceFloatingButton({
-    Key? key,
+    super.key,
     required this.isRouteDrawn,
     required this.onPressed,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -24,11 +24,11 @@ class GuidanceFloatingButton extends StatelessWidget {
           foregroundColor: Colors.white,
           elevation: isRouteDrawn ? 6 : 0,
           onPressed: isRouteDrawn ? onPressed : null,
+          tooltip: "شروع راهنمایی پیمایش",
           child: const Icon(
             Icons.navigation,
             size: 32,
           ),
-          tooltip: "شروع راهنمایی پیمایش",
         ),
       ),
     );

@@ -30,7 +30,7 @@ class RoutingTopPanel extends StatefulWidget {
   final Function(LatLng) onOriginGeocoded; // جدید: وقتی مبدا geocode شد
 
   const RoutingTopPanel({
-    Key? key,
+    super.key,
     required this.originController,
     required this.destinationController,
     this.selectedDestination,
@@ -50,7 +50,7 @@ class RoutingTopPanel extends StatefulWidget {
     required this.onProfileChanged,
     required this.onDestinationGeocoded,
     required this.onOriginGeocoded,
-  }) : super(key: key);
+  });
 
   @override
   State<RoutingTopPanel> createState() => _RoutingTopPanelState();

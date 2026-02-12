@@ -14,13 +14,13 @@ class ShareLocationButton extends StatelessWidget {
   final double? height;
 
   const ShareLocationButton({
-    Key? key,
+    super.key,
     required this.location,
     this.placeName,
     this.message = "من الان اینجام",
     this.backgroundColor,
     this.height,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {

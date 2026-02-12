@@ -3,6 +3,8 @@ import 'theme.dart';
 import 'settings_screen.dart';
 
 class CustomerAccountScreen extends StatefulWidget {
+  const CustomerAccountScreen({super.key});
+
   @override
   _CustomerAccountScreenState createState() => _CustomerAccountScreenState();
 }

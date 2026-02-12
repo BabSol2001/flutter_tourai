@@ -13,7 +13,6 @@ import 'navigation/widgets/routing_card.dart';
 import 'navigation/widgets/advanced_search.dart';
 import 'navigation/widgets/history_manager.dart';
 import 'navigation/widgets/search_sheet.dart';
-import 'navigation/widgets/guidance_button.dart';
 import 'navigation/widgets/guidance_manager.dart';
 import 'navigation/widgets/guidance_simulator.dart';
 import 'navigation/widgets/traffic_sign_indicator.dart';
@@ -23,10 +22,10 @@ class NavigationMapScreen extends StatefulWidget {
   final Function(bool) onThemeChanged;
 
   const NavigationMapScreen({
-    Key? key,
+    super.key,
     required this.isDarkMode,
     required this.onThemeChanged,
-  }) : super(key: key);
+  });
 
   @override
   State<NavigationMapScreen> createState() => _NavigationMapScreenState();
@@ -53,7 +52,7 @@ class _NavigationMapScreenState extends State<NavigationMapScreen>
   List<Polyline> _routePolylines = [];
   bool _isLoadingRoute = false;
 
-  String _selectedEngine = "valhalla";
+  final String _selectedEngine = "valhalla";
   String _selectedMode = "auto";
 
   String? _currentSignType;
@@ -98,7 +97,7 @@ class _NavigationMapScreenState extends State<NavigationMapScreen>
 
   String? _selectedWeatherLayer;  // null یعنی خاموش
 
-  List<String> _views = [
+  final List<String> _views = [
     "https://{s}.tile.openstreetmap.de/{z}/{x}/{y}.png",
     "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
     "https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}",
@@ -109,7 +108,7 @@ class _NavigationMapScreenState extends State<NavigationMapScreen>
 
   String _tileUrl = "https://{s}.tile.openstreetmap.de/{z}/{x}/{y}.png";
 
-  List<TileLayer> _overlayLayers = [];
+  final List<TileLayer> _overlayLayers = [];
 
   bool _showCrowdLayer = false;
   bool _showTrafficSignsLayer = false;
@@ -540,7 +539,7 @@ class _NavigationMapScreenState extends State<NavigationMapScreen>
             ),
             child: const Icon(
               Icons.circle_outlined,
-              color: const Color(0xFF1B5E20),
+              color: Color(0xFF1B5E20),
               size: 40,
             ),
           ),
@@ -1255,11 +1254,11 @@ Padding(
                             _showSnackBar("راهبری شروع شد! 🚗", success: true);
                           }
                         },
+                        tooltip: _isGuidanceMode ? "توقف راهبری" : "شروع راهبری",
                         child: Icon(
                           _isGuidanceMode ? Icons.stop : Icons.navigation,
                           size: 32,
                         ),
-                        tooltip: _isGuidanceMode ? "توقف راهبری" : "شروع راهبری",
                       ),
                       const SizedBox(height: 12),
                       FloatingActionButton.small(
@@ -1274,12 +1273,12 @@ Padding(
                                   _startSimulation();
                                 }
                               },
+                        tooltip: _isSimulationMode ? "توقف شبیه‌سازی" : "شروع شبیه‌سازی مسیر",
                         child: Icon(
                           _isSimulationMode ? Icons.stop : Icons.play_arrow,
                           color: Colors.white,
                           size: 32,
                         ),
-                        tooltip: _isSimulationMode ? "توقف شبیه‌سازی" : "شروع شبیه‌سازی مسیر",
                       ),
                       const SizedBox(height: 10),
                     ],
@@ -1288,8 +1287,8 @@ Padding(
                 FloatingActionButton.small(
                   heroTag: "fab_layers_menu",
                   onPressed: _showLayersMenu,
-                  child: const Icon(Icons.layers),
                   tooltip: "لایه‌های نقشه",
+                  child: const Icon(Icons.layers),
                 ),
                 const SizedBox(height: 10),
 
@@ -1302,8 +1301,8 @@ Padding(
                     });
                     _showSnackBar("ویو نقشه تغییر کرد!");
                   },
-                  child: const Icon(Icons.map),
                   tooltip: "تغییر ویو نقشه",
+                  child: const Icon(Icons.map),
                 ),
                 const SizedBox(height: 10),
 
@@ -1326,12 +1325,12 @@ Padding(
 
                     launchUrl(Uri.parse(googleMapsUrl), mode: LaunchMode.externalApplication);
                   },
+                  tooltip: "باز کردن در گوگل مپس",
                   child: Image.asset(
                     'assets/images/google_maps_icon.png',
                     width: 30,
                     height: 30,
                   ),
-                  tooltip: "باز کردن در گوگل مپس",
                 ),
                 const SizedBox(height: 10),
 
@@ -1341,8 +1340,11 @@ Padding(
                       ? (_isSearchMinimized ? Colors.blue : Colors.green)
                       : Colors.white,
                   onPressed: () {
-                    if (_isRoutingPanelMinimized) _openRoutingPanel();
-                    else _openSearchFromFab();
+                    if (_isRoutingPanelMinimized) {
+                      _openRoutingPanel();
+                    } else {
+                      _openSearchFromFab();
+                    }
                     setState(() {
                       _isSearchMinimized = false;
                       _isRoutingPanelMinimized = false;

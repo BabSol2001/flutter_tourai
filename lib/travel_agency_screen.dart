@@ -290,7 +290,7 @@ class TravelAgencyScreen extends StatelessWidget {
     final cardColor = theme.cardTheme.color;
     final textColor = theme.textTheme.bodyLarge?.color;
 
-    return Container(
+    return SizedBox(
       width: 200,
       child: Card(
         color: cardColor,

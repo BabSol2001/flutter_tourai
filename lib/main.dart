@@ -4,7 +4,6 @@ import 'package:flutter_tourai/customer_account_screen.dart';
 import 'theme.dart';
 import 'navigation_map_screen.dart';
 import 'travel_plan_screen.dart';
-import 'settings_screen.dart';
 
 void main() {
   runApp(const TourAIApp());

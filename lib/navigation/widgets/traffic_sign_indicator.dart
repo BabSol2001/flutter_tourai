@@ -6,10 +6,10 @@ class TrafficSignIndicator extends StatelessWidget {
   final String? signValue;    // مقدار (مثل "50" برای سرعت)
 
   const TrafficSignIndicator({
-    Key? key,
+    super.key,
     this.signType,
     this.signValue,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {

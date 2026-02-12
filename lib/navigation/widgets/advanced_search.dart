@@ -4,7 +4,6 @@ import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
-import 'package:latlong2/latlong.dart' show Distance;
 
 const String baseUrl = "http://192.168.0.105:8000";
 
@@ -19,8 +18,7 @@ class _AdvancedIconButton extends StatelessWidget {
     required this.color,
     required this.onTap,
     required this.tooltip,
-    Key? key,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -71,13 +69,13 @@ class AdvancedSearchSheet extends StatefulWidget {
   final Function(LatLng, String?)? onSelectPlace; // ← جدید
 
   const AdvancedSearchSheet({
-    Key? key,
+    super.key,
     required this.centerLocation,
     required this.onClose,
     required this.onBackToSearch,
     this.autoSearchCategory,
     this.onSelectPlace, // ← جدید
-  }) : super(key: key);
+  });
 
   @override
   State<AdvancedSearchSheet> createState() => _AdvancedSearchSheetState();

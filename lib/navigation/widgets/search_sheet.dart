@@ -6,7 +6,6 @@ import 'package:latlong2/latlong.dart';
 
 import 'history_manager.dart';
 import 'share.dart';
-import 'advanced_search.dart';
 
 class SearchSheet extends StatefulWidget {
   final TextEditingController searchController;
@@ -27,7 +26,7 @@ class SearchSheet extends StatefulWidget {
   final SearchHistoryManager historyManager;
 
   const SearchSheet({
-    Key? key,
+    super.key,
     required this.searchController,
     required this.isSearching,
     required this.onClearSearch,
@@ -44,7 +43,7 @@ class SearchSheet extends StatefulWidget {
     this.destinationController,
     required this.onShowSnackBar,
     required this.historyManager,
-  }) : super(key: key);
+  });
 
   @override
   State<SearchSheet> createState() => _SearchSheetState();
@@ -361,7 +360,7 @@ class _AdvancedIconButton extends StatelessWidget {
   final Color color;
   final VoidCallback onTap;
   final String tooltip;
-  const _AdvancedIconButton({required this.icon, required this.color, required this.onTap, required this.tooltip, Key? key}) : super(key: key);
+  const _AdvancedIconButton({required this.icon, required this.color, required this.onTap, required this.tooltip});
 
   @override
   Widget build(BuildContext context) {

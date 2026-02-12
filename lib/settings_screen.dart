@@ -162,7 +162,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               trailing: Switch(
                 value: _pushNotifications,
                 onChanged: (value) => setState(() => _pushNotifications = value),
-                activeColor: AppTheme.primary,
+                activeThumbColor: AppTheme.primary,
               ),
             ),
             _buildSettingTile(
@@ -171,7 +171,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               trailing: Switch(
                 value: _emailNotifications,
                 onChanged: (value) => setState(() => _emailNotifications = value),
-                activeColor: AppTheme.primary,
+                activeThumbColor: AppTheme.primary,
               ),
             ),
             const SizedBox(height: 24),
