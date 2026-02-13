@@ -2,10 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_tourai/city_detail_screen.dart';
 import 'theme.dart';
 import 'settings_screen.dart';
-
-// ── جدید ────────────────────────────────────────────────
-import 'services/api_service.dart';           // ApiService
-import 'models/city.dart';                   // مدل City
+import 'services/api_service.dart';
+import 'models/city.dart';
 
 class CitiesScreen extends StatefulWidget {
   const CitiesScreen({super.key});
@@ -23,7 +21,7 @@ class _CitiesScreenState extends State<CitiesScreen> {
 
   final ApiService _apiService = ApiService();
 
-  // ثابت کردن دامنه سرور (برای توسعه محلی - بعداً می‌تونی از Provider یا env بگیری)
+  // ثابت کردن دامنه سرور محلی (برای توسعه - بعداً می‌تونی از env بگیری)
   static const String serverBaseUrl = 'http://192.168.0.145:8000';
 
   @override
@@ -146,7 +144,7 @@ class _CitiesScreenState extends State<CitiesScreen> {
             child: RefreshIndicator(
               onRefresh: () async {
                 setState(() => _loadCities());
-                await _citiesFuture; // منتظر می‌ماند تا درخواست جدید تمام شود
+                await _citiesFuture;
               },
               child: FutureBuilder<List<City>>(
                 future: _citiesFuture,

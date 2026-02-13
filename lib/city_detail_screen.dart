@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'theme.dart';
 import 'settings_screen.dart';
-import 'models/city.dart';           // ← مدل شهر با mediaItems
+import 'models/city.dart';           // مدل شهر با mediaItems
+
+// صفحه گالری عکس‌ها (فایل جداگانه - بعداً می‌سازیم)
+import 'screens/media_gallery_screen.dart';   // ← این خط رو اضافه کن
 
 class CityDetailScreen extends StatefulWidget {
   final City city;
@@ -19,7 +22,7 @@ class _CityDetailScreenState extends State<CityDetailScreen>
     with SingleTickerProviderStateMixin {
   late final TabController _tabController;
 
-  // ثابت کردن دامنه سرور محلی (برای توسعه - بعداً می‌تونی از env بگیری)
+  // ثابت کردن دامنه سرور محلی (برای توسعه - بعداً از env بگیریم)
   static const String serverBaseUrl = 'http://192.168.0.145:8000';
 
   @override
@@ -27,7 +30,7 @@ class _CityDetailScreenState extends State<CityDetailScreen>
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
 
-    // لاگ دیباگ برای چک کردن رسانه‌ها (خیلی مفید برای دیباگ)
+    // لاگ دیباگ برای چک کردن رسانه‌ها
     print("DEBUG - CityDetailScreen باز شد");
     print("DEBUG - نام شهر: ${widget.city.name}");
     print("DEBUG - ID شهر: ${widget.city.id}");
@@ -109,59 +112,73 @@ class _CityDetailScreenState extends State<CityDetailScreen>
                   color: theme.appBarTheme.foregroundColor,
                 ),
               ),
-              background: Stack(
-                fit: StackFit.expand,
-                children: [
-                  // انتخاب عکس پس‌زمینه (جدیدترین عکس معتبر)
-                  Builder(
-                    builder: (context) {
-                      // پیدا کردن آخرین عکس معتبر (جدیدترین آپلود شده)
-                      CityMedia? imageMedia;
-                      for (final m in widget.city.mediaItems.reversed) {
-                        if (m.mediaType == 'image' && m.url != null && m.url!.isNotEmpty) {
-                          imageMedia = m;
-                          break;
-                        }
-                      }
-
-                      final rawUrl = imageMedia?.url;
-                      final bgUrl = rawUrl != null && rawUrl.isNotEmpty
-                          ? '$serverBaseUrl$rawUrl'
-                          : 'assets/images/default_background.jpg';
-
-                      print("DEBUG - URL خام از API برای بک‌گراند: $rawUrl");
-                      print("DEBUG - URL نهایی بک‌گراند: $bgUrl");
-
-                      return Image(
-                        image: bgUrl.startsWith('assets/')
-                            ? const AssetImage('assets/images/default_background.jpg')
-                            : NetworkImage(bgUrl),
-                        fit: BoxFit.cover,
-                        loadingBuilder: (context, child, loadingProgress) {
-                          if (loadingProgress == null) return child;
-                          return const Center(child: CircularProgressIndicator());
-                        },
-                        errorBuilder: (context, error, stackTrace) {
-                          print("ERROR - لود بک‌گراند شکست خورد: $error");
-                          return Container(
-                            color: Colors.grey[400],
-                            child: const Icon(Icons.broken_image, size: 80),
-                          );
-                        },
-                      );
-                    },
-                  ),
-
-                  Container(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [Colors.transparent, Colors.black.withOpacity(0.7)],
+              background: GestureDetector(
+                onTap: () {
+                  // وقتی روی بک‌گراند تپ کردی، گالری باز می‌شه
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => MediaGalleryScreen(
+                        mediaItems: widget.city.mediaItems,
+                        initialIndex: 0, // می‌تونی index عکس فعلی رو بفرستی
                       ),
                     ),
-                  ),
-                ],
+                  );
+                },
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    // انتخاب عکس پس‌زمینه (جدیدترین عکس معتبر)
+                    Builder(
+                      builder: (context) {
+                        // پیدا کردن آخرین عکس معتبر (جدیدترین آپلود شده)
+                        CityMedia? imageMedia;
+                        for (final m in widget.city.mediaItems.reversed) {
+                          if (m.mediaType == 'image' && m.url != null && m.url!.isNotEmpty) {
+                            imageMedia = m;
+                            break;
+                          }
+                        }
+
+                        final rawUrl = imageMedia?.url;
+                        final bgUrl = rawUrl != null && rawUrl.isNotEmpty
+                            ? '$serverBaseUrl$rawUrl'
+                            : 'assets/images/default_background.jpg';
+
+                        print("DEBUG - URL خام از API برای بک‌گراند: $rawUrl");
+                        print("DEBUG - URL نهایی بک‌گراند: $bgUrl");
+
+                        return Image(
+                          image: bgUrl.startsWith('assets/')
+                              ? const AssetImage('assets/images/default_background.jpg')
+                              : NetworkImage(bgUrl),
+                          fit: BoxFit.cover,
+                          loadingBuilder: (context, child, loadingProgress) {
+                            if (loadingProgress == null) return child;
+                            return const Center(child: CircularProgressIndicator());
+                          },
+                          errorBuilder: (context, error, stackTrace) {
+                            print("ERROR - لود بک‌گراند شکست خورد: $error");
+                            return Container(
+                              color: Colors.grey[400],
+                              child: const Icon(Icons.broken_image, size: 80),
+                            );
+                          },
+                        );
+                      },
+                    ),
+
+                    Container(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [Colors.transparent, Colors.black.withOpacity(0.7)],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
@@ -231,9 +248,8 @@ class _CityDetailScreenState extends State<CityDetailScreen>
     );
   }
 
-  // ────────────────────────────────────────────────
-  // تب‌ها و کارت‌ها تقریباً بدون تغییر (فعلاً هاردکد هستند)
-  // ────────────────────────────────────────────────
+  // تب‌ها و کارت‌ها بدون تغییر باقی می‌مانند (برای صرفه‌جویی در فضا تکرار نشدند)
+  // فقط بخش‌های اصلی رو نگه داشتم
 
   Widget _buildAttractionsTab(ThemeData theme, bool isTablet) {
     final attractions = [
