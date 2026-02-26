@@ -1,6 +1,7 @@
 import 'package:carousel_slider/carousel_slider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_tourai/models/city.dart';
+import '../services/api_service.dart';
 
 class MediaGalleryScreen extends StatefulWidget {
   final List<CityMedia> mediaItems;
@@ -79,7 +80,7 @@ class _MediaGalleryScreenState extends State<MediaGalleryScreen> {
               ),
               items: validMedia.map((media) {
                 return Image.network(
-                  'http://192.168.0.145:8000${media.url}',
+                  ApiService().getFullMediaUrl(media.url),
                   fit: BoxFit.contain,
                   loadingBuilder: (context, child, loadingProgress) {
                     if (loadingProgress == null) return child;

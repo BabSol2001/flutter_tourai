@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_tourai/city_detail_screen.dart';
 import 'theme.dart';
 import 'settings_screen.dart';
-import 'services/api_service.dart';
-import 'models/city.dart';
+
+// ── جدید ────────────────────────────────────────────────
+import 'services/api_service.dart';           // ApiService
+import 'models/city.dart';                   // مدل City
 
 class CitiesScreen extends StatefulWidget {
   const CitiesScreen({super.key});
@@ -21,8 +23,8 @@ class _CitiesScreenState extends State<CitiesScreen> {
 
   final ApiService _apiService = ApiService();
 
-  // ثابت کردن دامنه سرور محلی (برای توسعه - بعداً می‌تونی از env بگیری)
-  static const String serverBaseUrl = 'http://192.168.0.145:8000';
+  // ثابت کردن دامنه سرور (برای توسعه محلی - بعداً می‌تونی از Provider یا env بگیری)
+  //static const String serverBaseUrl = 'http://192.168.0.147:8000';
 
   @override
   void initState() {
@@ -144,7 +146,7 @@ class _CitiesScreenState extends State<CitiesScreen> {
             child: RefreshIndicator(
               onRefresh: () async {
                 setState(() => _loadCities());
-                await _citiesFuture;
+                await _citiesFuture; // منتظر می‌ماند تا درخواست جدید تمام شود
               },
               child: FutureBuilder<List<City>>(
                 future: _citiesFuture,
@@ -239,12 +241,10 @@ class _CitiesScreenState extends State<CitiesScreen> {
       }
     }
 
-    final rawUrl = imageMedia?.url;
-    final displayImageUrl = rawUrl != null && rawUrl.isNotEmpty
-        ? '$serverBaseUrl$rawUrl'
-        : 'assets/images/default_city.jpg';
+  final rawUrl = imageMedia?.url;
+    final displayImageUrl = ApiService().getFullMediaUrl(rawUrl);
 
-    print("DEBUG CitiesScreen - شهر ${city.name} - URL عکس کارت: $displayImageUrl");
+    print("DEBUG CitiesScreen - شهر ${city.name} - URL عکس کارت: ${ApiService().getFullMediaUrl(rawUrl)}");
 
     return Card(
       elevation: 0,

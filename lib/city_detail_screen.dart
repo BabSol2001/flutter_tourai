@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
-import 'theme.dart';
-import 'settings_screen.dart';
-import 'models/city.dart';           // مدل شهر با mediaItems
-
-// صفحه گالری عکس‌ها (فایل جداگانه - بعداً می‌سازیم)
-import 'screens/media_gallery_screen.dart';   // ← این خط رو اضافه کن
+import 'package:flutter_tourai/theme.dart';
+import 'package:flutter_tourai/settings_screen.dart';
+import 'package:flutter_tourai/models/city.dart';
+import 'package:flutter_tourai/screens/media_gallery_screen.dart';
+import 'package:flutter_tourai/screens/city_attraction_detail.dart';
+import 'package:flutter_tourai/services/api_service.dart';
 
 class CityDetailScreen extends StatefulWidget {
   final City city;
@@ -21,16 +21,19 @@ class CityDetailScreen extends StatefulWidget {
 class _CityDetailScreenState extends State<CityDetailScreen>
     with SingleTickerProviderStateMixin {
   late final TabController _tabController;
-
-  // ثابت کردن دامنه سرور محلی (برای توسعه - بعداً از env بگیریم)
-  static const String serverBaseUrl = 'http://192.168.0.145:8000';
+  late final ApiService _apiService;
+  late Future<List<Attraction>> _attractionsFuture;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
+    _apiService = ApiService();
 
-    // لاگ دیباگ برای چک کردن رسانه‌ها
+    // فقط یک بار درخواست جاذبه‌ها
+    _attractionsFuture = _apiService.getAttractions(widget.city.id);
+
+    // لاگ رسانه‌های شهر
     print("DEBUG - CityDetailScreen باز شد");
     print("DEBUG - نام شهر: ${widget.city.name}");
     print("DEBUG - ID شهر: ${widget.city.id}");
@@ -40,15 +43,8 @@ class _CityDetailScreenState extends State<CityDetailScreen>
       print("DEBUG - لیست رسانه‌ها:");
       for (var i = 0; i < widget.city.mediaItems.length; i++) {
         final m = widget.city.mediaItems[i];
-        print("   رسانه ${i + 1}:");
-        print("      نوع: ${m.mediaType}");
-        print("      URL: ${m.url ?? 'null'}");
-        print("      کپشن: ${m.caption ?? 'بدون کپشن'}");
-        print("      order: ${m.order}");
-        print("      ---");
+        print("   رسانه ${i + 1}: نوع=${m.mediaType} | URL=${m.url ?? 'null'} | کپشن=${m.caption ?? 'بدون کپشن'}");
       }
-    } else {
-      print("DEBUG - هیچ رسانه‌ای برای این شهر وجود ندارد");
     }
   }
 
@@ -114,13 +110,12 @@ class _CityDetailScreenState extends State<CityDetailScreen>
               ),
               background: GestureDetector(
                 onTap: () {
-                  // وقتی روی بک‌گراند تپ کردی، گالری باز می‌شه
                   Navigator.push(
                     context,
                     MaterialPageRoute(
                       builder: (context) => MediaGalleryScreen(
                         mediaItems: widget.city.mediaItems,
-                        initialIndex: 0, // می‌تونی index عکس فعلی رو بفرستی
+                        initialIndex: 0,
                       ),
                     ),
                   );
@@ -128,10 +123,8 @@ class _CityDetailScreenState extends State<CityDetailScreen>
                 child: Stack(
                   fit: StackFit.expand,
                   children: [
-                    // انتخاب عکس پس‌زمینه (جدیدترین عکس معتبر)
                     Builder(
                       builder: (context) {
-                        // پیدا کردن آخرین عکس معتبر (جدیدترین آپلود شده)
                         CityMedia? imageMedia;
                         for (final m in widget.city.mediaItems.reversed) {
                           if (m.mediaType == 'image' && m.url != null && m.url!.isNotEmpty) {
@@ -140,12 +133,8 @@ class _CityDetailScreenState extends State<CityDetailScreen>
                           }
                         }
 
-                        final rawUrl = imageMedia?.url;
-                        final bgUrl = rawUrl != null && rawUrl.isNotEmpty
-                            ? '$serverBaseUrl$rawUrl'
-                            : 'assets/images/default_background.jpg';
+                        final bgUrl = _apiService.getFullMediaUrl(imageMedia?.url);
 
-                        print("DEBUG - URL خام از API برای بک‌گراند: $rawUrl");
                         print("DEBUG - URL نهایی بک‌گراند: $bgUrl");
 
                         return Image(
@@ -213,7 +202,6 @@ class _CityDetailScreenState extends State<CityDetailScreen>
                     ],
                   ),
                   const SizedBox(height: 24),
-                  // تب‌ها
                   Container(
                     decoration: BoxDecoration(
                       color: theme.cardTheme.color,
@@ -248,45 +236,146 @@ class _CityDetailScreenState extends State<CityDetailScreen>
     );
   }
 
-  // تب‌ها و کارت‌ها بدون تغییر باقی می‌مانند (برای صرفه‌جویی در فضا تکرار نشدند)
-  // فقط بخش‌های اصلی رو نگه داشتم
-
   Widget _buildAttractionsTab(ThemeData theme, bool isTablet) {
-    final attractions = [
-      {
-        'name': 'برج ایفل',
-        'image': 'https://images.unsplash.com/photo-1516542077187-61520f3bf633?auto=format&fit=crop&w=500&q=80'
-      },
-      {
-        'name': 'موزه لوور',
-        'image': 'https://images.unsplash.com/photo-1527004013197-933c4bb611b3?auto=format&fit=crop&w=500&q=80'
-      },
-      {
-        'name': 'کلیسای نوتردام',
-        'image': 'https://images.unsplash.com/photo-1551808520-0e2a6f8e8f6f?auto=format&fit=crop&w=500&q=80'
-      },
-      {
-        'name': 'رود سن',
-        'image': 'https://images.unsplash.com/photo-1502602898657-3e91760cbb34?auto=format&fit=crop&w=500&q=80'
-      },
-    ];
+    return FutureBuilder<List<Attraction>>(
+      future: _attractionsFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
 
-    return GridView.builder(
-      padding: const EdgeInsets.all(16),
-      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: isTablet ? 3 : 2,
-        crossAxisSpacing: 16,
-        mainAxisSpacing: 16,
-        childAspectRatio: 0.9,
-      ),
-      itemCount: attractions.length,
-      itemBuilder: (context, index) {
-        final attr = attractions[index];
-        return _buildAttractionCard(attr, theme);
+        if (snapshot.hasError) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text('خطا در بارگذاری جاذبه‌ها: ${snapshot.error}'),
+                const SizedBox(height: 16),
+                ElevatedButton(
+                  onPressed: () {
+                    setState(() {
+                      _attractionsFuture = _apiService.getAttractions(widget.city.id);
+                    });
+                  },
+                  child: const Text('تلاش مجدد'),
+                ),
+              ],
+            ),
+          );
+        }
+
+        final attractions = snapshot.data ?? [];
+
+        if (attractions.isEmpty) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.location_city_outlined, size: 80, color: Colors.grey),
+                const SizedBox(height: 16),
+                const Text('هنوز جاذبه‌ای برای این شهر ثبت نشده', style: TextStyle(color: Colors.grey)),
+              ],
+            ),
+          );
+        }
+
+        return GridView.builder(
+          padding: const EdgeInsets.all(16),
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: isTablet ? 3 : 2,
+            crossAxisSpacing: 16,
+            mainAxisSpacing: 16,
+            childAspectRatio: 0.9,
+          ),
+          itemCount: attractions.length,
+          itemBuilder: (context, index) {
+            final attraction = attractions[index];
+            return _buildAttractionCard(attraction, theme);
+          },
+        );
       },
     );
   }
 
+  Widget _buildAttractionCard(Attraction attraction, ThemeData theme) {
+    final textColor = theme.textTheme.bodyMedium?.color;
+
+    final firstMedia = attraction.mediaItems.isNotEmpty ? attraction.mediaItems.first : null;
+    final imageUrl = _apiService.getFullMediaUrl(firstMedia?.url);
+
+    return Card(
+      elevation: 0,
+      color: theme.cardTheme.color,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => CityAttractionDetailScreen(
+                cityId: widget.city.id,
+                initialAttractionId: attraction.id,
+              ),
+            ),
+          );
+        },
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            ClipRRect(
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+              child: Image.network(
+                imageUrl,
+                height: 100,
+                width: double.infinity,
+                fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) => Container(
+                  height: 100,
+                  color: Colors.grey[300],
+                  child: const Icon(Icons.broken_image),
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    attraction.name,
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    attraction.description.length > 60
+                        ? '${attraction.description.substring(0, 60)}...'
+                        : attraction.description,
+                    style: TextStyle(color: textColor?.withOpacity(0.7), fontSize: 13),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      const Icon(Icons.star, color: Colors.amber, size: 16),
+                      Text(' ${attraction.averageRating.toStringAsFixed(1)}'),
+                      const Spacer(),
+                      Text('${attraction.likeCount} لایک'),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // تب داستان‌ها (هاردکد - اگر بخوای واقعی بشه بگو)
   Widget _buildStoriesTab(BuildContext context, ThemeData theme, bool isTablet) {
     final textColor = theme.textTheme.bodyMedium?.color;
 
@@ -300,6 +389,7 @@ class _CityDetailScreenState extends State<CityDetailScreen>
     );
   }
 
+  // تب غذا (هاردکد - اگر بخوای واقعی بشه بگو)
   Widget _buildFoodTab(ThemeData theme, bool isTablet) {
     final foods = [
       {'name': 'کروسان', 'price': '۸۰,۰۰۰ تومان'},
@@ -325,65 +415,15 @@ class _CityDetailScreenState extends State<CityDetailScreen>
             ),
             title: Text(
               food['name'] ?? 'نامشخص',
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                color: textColor,
-              ),
+              style: TextStyle(fontWeight: FontWeight.bold, color: textColor),
             ),
             trailing: Text(
               food['price'] ?? 'نامشخص',
-              style: TextStyle(
-                fontWeight: FontWeight.w600,
-                color: AppTheme.primary,
-              ),
+              style: TextStyle(fontWeight: FontWeight.w600, color: AppTheme.primary),
             ),
           ),
         );
       },
-    );
-  }
-
-  Widget _buildAttractionCard(Map<String, String> attr, ThemeData theme) {
-    final textColor = theme.textTheme.bodyMedium?.color;
-
-    return Card(
-      elevation: 0,
-      color: theme.cardTheme.color,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          ClipRRect(
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
-            child: Image.network(
-              attr['image']!,
-              height: 100,
-              width: double.infinity,
-              fit: BoxFit.cover,
-              errorBuilder: (context, error, stackTrace) {
-                return Container(
-                  height: 100,
-                  color: Colors.grey.withOpacity(0.2),
-                  child: const Icon(Icons.broken_image, size: 40, color: Colors.grey),
-                );
-              },
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(8),
-            child: Text(
-              attr['name']!,
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 14,
-                color: textColor,
-              ),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-        ],
-      ),
     );
   }
 
@@ -399,19 +439,13 @@ class _CityDetailScreenState extends State<CityDetailScreen>
         ),
         title: Text(
           title,
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            color: textColor,
-          ),
+          style: TextStyle(fontWeight: FontWeight.bold, color: textColor),
         ),
         subtitle: Text(
           subtitle,
           maxLines: 2,
           overflow: TextOverflow.ellipsis,
-          style: TextStyle(
-            color: textColor?.withOpacity(0.7),
-            fontSize: 13,
-          ),
+          style: TextStyle(color: textColor?.withOpacity(0.7), fontSize: 13),
         ),
         trailing: Icon(
           Icons.arrow_forward_ios,
