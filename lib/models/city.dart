@@ -252,4 +252,5 @@ class Rating {
 
   @override
   String toString() => 'Rating(user: $user, value: $value)';
+  
 }
