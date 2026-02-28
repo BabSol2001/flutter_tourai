@@ -29,18 +29,31 @@ class _CityAttractionDetailScreenState extends State<CityAttractionDetailScreen>
   int _currentPage = 0;
 
   @override
-  void initState() {
-    super.initState();
-    _attractionsFuture = _apiService.getAttractions(widget.cityId);
-    // پیدا کردن ایندکس اولیه برای اسکرول به جاذبه انتخاب‌شده
+  @override
+void initState() {
+  super.initState();
+  //_carouselController = CarouselSliderController(); // اگر داشتی نگه دار، اگر نه حذف کن
+  //_currentIndex = widget.initialIndex;
+
+  _attractionsFuture = _apiService.getAttractions(widget.cityId);
+
+  // منتظر لود شدن داده‌ها شو، اما jump رو به بعد از build موکول کن
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    // این کال‌بک بعد از اولین build اجرا می‌شه، یعنی PageView ساخته شده
     _attractionsFuture.then((attractions) {
       final initialIndex = attractions.indexWhere((a) => a.id == widget.initialAttractionId);
-      if (initialIndex != -1) {
-        setState(() => _currentPage = initialIndex);
+      if (initialIndex != -1 && initialIndex >= 0 && initialIndex < attractions.length) {
+        //_currentIndex = initialIndex;
         _pageController.jumpToPage(initialIndex);
+        debugPrint("DEBUG - پرش به صفحه اولیه: $initialIndex");
+      } else {
+        debugPrint("DEBUG - ایندکس اولیه پیدا نشد یا خارج از محدوده");
       }
+    }).catchError((error) {
+      debugPrint("ERROR - لود جاذبه‌ها شکست خورد: $error");
     });
-  }
+  });
+}
 
   @override
   void dispose() {
@@ -52,20 +65,44 @@ class _CityAttractionDetailScreenState extends State<CityAttractionDetailScreen>
 Widget build(BuildContext context) {
   return Scaffold(
     backgroundColor: Colors.black,
+    // body: FutureBuilder<List<Attraction>>(
+    //   future: _attractionsFuture,
+    //   builder: (context, snapshot) {
+    //     if (snapshot.connectionState == ConnectionState.waiting) {
+    //       return const Center(child: CircularProgressIndicator(color: Colors.white));
+    //     }
+    //     if (snapshot.hasError) {
+    //       return Center(child: Text('خطا: ${snapshot.error}', style: const TextStyle(color: Colors.white)));
+    //     }
+    //     if (!snapshot.hasData || snapshot.data!.isEmpty) {
+    //       return const Center(child: Text('جاذبه‌ای یافت نشد', style: TextStyle(color: Colors.white)));
+    //     }
+
+    //     final attractions = snapshot.data!;
+
+    //     return PageView.builder(
+
     body: FutureBuilder<List<Attraction>>(
       future: _attractionsFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator(color: Colors.white));
         }
+
         if (snapshot.hasError) {
-          return Center(child: Text('خطا: ${snapshot.error}', style: const TextStyle(color: Colors.white)));
-        }
-        if (!snapshot.hasData || snapshot.data!.isEmpty) {
-          return const Center(child: Text('جاذبه‌ای یافت نشد', style: TextStyle(color: Colors.white)));
+          debugPrint("ERROR in FutureBuilder: ${snapshot.error}");
+          return Center(child: Text('خطا در بارگذاری: ${snapshot.error}', style: const TextStyle(color: Colors.white)));
         }
 
-        final attractions = snapshot.data!;
+        // چک مهم: اگر data null باشه
+        final attractions = snapshot.data;
+        if (attractions == null) {
+          return const Center(child: Text('داده‌ای دریافت نشد', style: TextStyle(color: Colors.white)));
+        }
+
+        if (attractions.isEmpty) {
+          return const Center(child: Text('جاذبه‌ای یافت نشد', style: TextStyle(color: Colors.white)));
+        }
 
         return PageView.builder(
           controller: _pageController,

@@ -300,8 +300,20 @@ class _CityDetailScreenState extends State<CityDetailScreen>
   Widget _buildAttractionCard(Attraction attraction, ThemeData theme) {
     final textColor = theme.textTheme.bodyMedium?.color;
 
-    final firstMedia = attraction.mediaItems.isNotEmpty ? attraction.mediaItems.first : null;
-    final imageUrl = _apiService.getFullMediaUrl(firstMedia?.url);
+    // پیدا کردن اولین رسانه‌ای که url معتبر (غیر null و غیر خالی) دارد
+    String imageUrl = 'assets/images/default_attraction.jpg';
+
+    // حلقه برای پیدا کردن اولین url معتبر (نه فقط اولی)
+    for (final media in attraction.mediaItems) {
+      if (media.url != null && media.url!.trim().isNotEmpty) {
+        imageUrl = _apiService.getFullMediaUrl(media.url!);
+        debugPrint("DEBUG - جاذبه ${attraction.name} → عکس معتبر پیدا شد از رسانه id=${media.id}: ${media.url}");
+        break;
+      }
+    }
+
+    // لاگ نهایی برای چک کردن
+    debugPrint("جاذبه ${attraction.name} → URL نهایی تامبنیل: $imageUrl");
 
     return Card(
       elevation: 0,
@@ -330,11 +342,18 @@ class _CityDetailScreenState extends State<CityDetailScreen>
                 height: 100,
                 width: double.infinity,
                 fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) => Container(
-                  height: 100,
-                  color: Colors.grey[300],
-                  child: const Icon(Icons.broken_image),
-                ),
+                loadingBuilder: (context, child, loadingProgress) {
+                  if (loadingProgress == null) return child;
+                  return const Center(child: CircularProgressIndicator());
+                },
+                errorBuilder: (context, error, stackTrace) {
+                  debugPrint("ERROR - لود عکس جاذبه ${attraction.name} شکست خورد: $error");
+                  return Container(
+                    height: 100,
+                    color: Colors.grey[300],
+                    child: const Icon(Icons.broken_image),
+                  );
+                },
               ),
             ),
             Padding(
