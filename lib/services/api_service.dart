@@ -10,11 +10,11 @@ class ApiService {
   //                  تنظیمات پایه
   // ────────────────────────────────────────────────
 
-  static const String baseUrl = 'http://192.168.0.147:8000/api/v1/';
+  static const String baseUrl = 'http://192.168.0.105:8000/api/v1/';
   
   // دامنه پایه برای فایل‌های رسانه (عکس/ویدیو)
   // فقط همین یک جا رو تغییر بده وقتی سرور عوض شد
-  static const String _mediaBaseUrl = 'http://192.168.0.147:8000';
+  static const String _mediaBaseUrl = 'http://192.168.0.105:8000';
 
   late final Dio _dio;
 
@@ -150,6 +150,70 @@ class ApiService {
       debugPrint('خطای شبکه: ${e.message}');
     }
   }
+
+  // بعد از متد getAttractions اضافه کن
+  Future<List<Live>> getLives(int cityId) async {
+    try {
+      final response = await _dio.get('cities/cities/$cityId/lives/');
+
+      if (response.statusCode == 200) {
+        final data = response.data;
+        final List<dynamic> list = data is Map && data.containsKey('results')
+            ? data['results']
+            : data;
+
+        return list.map((item) => Live.fromJson(item)).toList();
+      }
+      throw Exception('خطا در دریافت لایوها');
+    } on DioException catch (e) {
+      _handleDioError(e);
+      rethrow;
+    }
+  }
+
+  // ------------------------------
+// Attraction Like
+// ------------------------------
+Future<void> likeAttraction(int cityId, int attractionId) async {
+  try {
+    await _dio.post(
+      'cities/$cityId/attractions/$attractionId/like/',
+    );
+  } catch (e) {
+    _handleDioError(e as DioException);
+    rethrow;
+  }
+}
+
+// ------------------------------
+// Attraction Comment
+// ------------------------------
+Future<void> commentAttraction(int cityId, int attractionId, String text) async {
+  try {
+    await _dio.post(
+      'cities/$cityId/attractions/$attractionId/comment/',
+      data: {'text': text},
+    );
+  } catch (e) {
+    _handleDioError(e as DioException);
+    rethrow;
+  }
+}
+
+// ------------------------------
+// Attraction Rating
+// ------------------------------
+Future<void> rateAttraction(int cityId, int attractionId, int score) async {
+  try {
+    await _dio.post(
+      'cities/$cityId/attractions/$attractionId/rate/',
+      data: {'score': score},
+    );
+  } catch (e) {
+    _handleDioError(e as DioException);
+    rethrow;
+  }
+}
 
   // می‌تونی متدهای دیگه مثل getCityDetail، postLike، postComment و ... رو هم اینجا اضافه کنی
 }

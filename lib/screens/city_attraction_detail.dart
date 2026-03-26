@@ -23,6 +23,9 @@ class _CityAttractionDetailScreenState extends State<CityAttractionDetailScreen>
   late Future<List<Attraction>> _attractionsFuture;
   final ApiService _apiService = ApiService();
   final PageController _pageController = PageController();
+  final TextEditingController commentController = TextEditingController();
+
+
 
   int _currentPage = 0;
 
@@ -166,7 +169,7 @@ class _CityAttractionDetailScreenState extends State<CityAttractionDetailScreen>
                   children: [
                     _buildActionButton(
                       icon: Icons.favorite,
-                      count: attraction.likeCount,
+                      count: attraction.likeCountMutable,
                       color: Colors.red,
                       onTap: () => _toggleLike(attraction),
                     ),
@@ -178,7 +181,7 @@ class _CityAttractionDetailScreenState extends State<CityAttractionDetailScreen>
                     ),
                     _buildActionButton(
                       icon: Icons.star,
-                      count: attraction.averageRating.toStringAsFixed(1),
+                      count: attraction.averageRatingMutable.toStringAsFixed(1),
                       color: Colors.amber,
                       onTap: () => _showRatingDialog(attraction),
                     ),
@@ -293,12 +296,26 @@ class _CityAttractionDetailScreenState extends State<CityAttractionDetailScreen>
     );
   }
 
-  void _toggleLike(Attraction attraction) {
-    // TODO: API call برای لایک
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('لایک ثبت شد')),
-    );
+  void _toggleLike(Attraction attraction) async {
+    try {
+      await _apiService.likeAttraction(widget.cityId, attraction.id);
+
+      setState(() {
+        if (attraction.userHasLiked) {
+          attraction.userHasLiked = false;
+          attraction.likeCountMutable--;
+        } else {
+          attraction.userHasLiked = true;
+          attraction.likeCountMutable++;
+        }
+      });
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('خطا در لایک')),
+      );
+    }
   }
+
 
   void _showCommentsBottomSheet(Attraction attraction) {
     showModalBottomSheet(
@@ -331,8 +348,30 @@ class _CityAttractionDetailScreenState extends State<CityAttractionDetailScreen>
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(30), borderSide: BorderSide.none),
                   suffixIcon: IconButton(
                     icon: const Icon(Icons.send, color: Colors.blue),
-                    onPressed: () {
-                      // TODO: ارسال کامنت به API
+                    onPressed: () async {
+                      final text = commentController.text.trim();
+                        if (text.isEmpty) return;
+
+                        try {
+                          await _apiService.commentAttraction(widget.cityId, attraction.id, text);
+
+                          setState(() {
+                            attraction.comments.add(
+                              Comment(
+                                id: 0,
+                                user: "شما",
+                                text: text,
+                                createdAt: DateTime.now().toIso8601String(), // ← مشکل حل شد
+                              ),
+                            );
+                          });
+
+                          commentController.clear();
+                        } catch (e) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('خطا در ارسال کامنت')),
+                          );
+                        }
                     },
                   ),
                 ),
@@ -375,12 +414,20 @@ class _CityAttractionDetailScreenState extends State<CityAttractionDetailScreen>
                   child: const Text('لغو', style: TextStyle(color: Colors.white70)),
                 ),
                 TextButton(
-                  onPressed: () {
-                    // TODO: ارسال امتیاز به API
-                    Navigator.pop(context);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('امتیاز $selectedRating ثبت شد')),
-                    );
+                  onPressed: () async {
+                    try {
+                      await _apiService.rateAttraction(widget.cityId, attraction.id, selectedRating);
+
+                      setState(() {
+                        attraction.averageRatingMutable = selectedRating.toDouble();
+                      });
+
+                      Navigator.pop(context);
+                    } catch (e) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('خطا در ثبت امتیاز')),
+                      );
+                    }
                   },
                   child: const Text('ثبت', style: TextStyle(color: Colors.blue)),
                 ),

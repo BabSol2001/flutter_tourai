@@ -7,14 +7,16 @@ abstract class BaseMedia {
   String? get caption;
 }
 
+// ─────────────────────────────────────────────
 // مدل شهر
+// ─────────────────────────────────────────────
 class City {
   final int id;
   final String name;
-  final int country;           // id کشور
-  final String? countryName;   // برای نمایش (از سریالایزر country_name)
+  final int country;
+  final String? countryName;
   final bool isActive;
-  final String? imageUrl;      // بعداً اضافه می‌کنیم یا از جای دیگه می‌گیریم
+  final String? imageUrl;
   final double? rating;
   final String? price;
   final String? description;
@@ -58,19 +60,16 @@ class City {
       createdAt: DateTime.tryParse(json['created_at'] ?? '') ?? DateTime.now(),
       updatedAt: DateTime.tryParse(json['updated_at'] ?? '') ?? DateTime.now(),
       mediaItems: (json['media_items'] as List<dynamic>? ?? [])
-          .map((item) {
-            if (item is Map<String, dynamic>) {
-              return CityMedia.fromJson(item);
-            }
-            return null;
-          })
+          .map((item) => item is Map<String, dynamic> ? CityMedia.fromJson(item) : null)
           .whereType<CityMedia>()
           .toList(),
     );
   }
 }
 
+// ─────────────────────────────────────────────
 // رسانه‌های شهر
+// ─────────────────────────────────────────────
 class CityMedia implements BaseMedia {
   @override
   final int id;
@@ -104,7 +103,9 @@ class CityMedia implements BaseMedia {
   }
 }
 
+// ─────────────────────────────────────────────
 // رسانه‌های جاذبه
+// ─────────────────────────────────────────────
 class AttractionMedia implements BaseMedia {
   @override
   final int id;
@@ -132,7 +133,9 @@ class AttractionMedia implements BaseMedia {
   }
 }
 
-// مدل جاذبه
+// ─────────────────────────────────────────────
+// مدل جاذبه (با کمترین تغییر → فقط فیلدهای محلی اضافه شد)
+// ─────────────────────────────────────────────
 class Attraction {
   final int id;
   final String name;
@@ -140,9 +143,15 @@ class Attraction {
   final double averageRating;
   final int likeCount;
   final double score;
+
   final List<BaseMedia> mediaItems;
   final List<Comment> comments;
   final List<Rating> ratings;
+
+  // ── فیلدهای محلی (برای UI) ─────────────────────
+  bool userHasLiked;
+  int likeCountMutable;
+  double averageRatingMutable;
 
   Attraction({
     required this.id,
@@ -154,7 +163,12 @@ class Attraction {
     required this.mediaItems,
     required this.comments,
     required this.ratings,
-  });
+
+    this.userHasLiked = false,
+    int? likeCountMutable,
+    double? averageRatingMutable,
+  })  : likeCountMutable = likeCountMutable ?? likeCount,
+        averageRatingMutable = averageRatingMutable ?? averageRating;
 
   factory Attraction.fromJson(Map<String, dynamic> json) {
     return Attraction(
@@ -166,44 +180,26 @@ class Attraction {
       score: (json['score'] as num?)?.toDouble() ?? 0.0,
 
       mediaItems: (json['media_items'] as List<dynamic>? ?? [])
-          .map((item) {
-            if (item is Map<String, dynamic>) {
-              return AttractionMedia.fromJson(item);
-            }
-            return null;
-          })
+          .map((item) => item is Map<String, dynamic> ? AttractionMedia.fromJson(item) : null)
           .whereType<BaseMedia>()
           .toList(),
 
       comments: (json['comments'] as List<dynamic>? ?? [])
-          .map((item) {
-            if (item is Map<String, dynamic>) {
-              return Comment.fromJson(item);
-            }
-            return null;
-          })
+          .map((item) => item is Map<String, dynamic> ? Comment.fromJson(item) : null)
           .whereType<Comment>()
           .toList(),
 
       ratings: (json['ratings'] as List<dynamic>? ?? [])
-          .map((item) {
-            if (item is Map<String, dynamic>) {
-              return Rating.fromJson(item);
-            }
-            return null;
-          })
+          .map((item) => item is Map<String, dynamic> ? Rating.fromJson(item) : null)
           .whereType<Rating>()
           .toList(),
     );
   }
-
-  @override
-  String toString() {
-    return 'Attraction(id: $id, name: $name, mediaCount: ${mediaItems.length}, likes: $likeCount, avgRating: $averageRating)';
-  }
 }
 
+// ─────────────────────────────────────────────
 // کامنت
+// ─────────────────────────────────────────────
 class Comment {
   final int id;
   final String user;
@@ -225,12 +221,11 @@ class Comment {
       createdAt: json['created_at'] as String? ?? '',
     );
   }
-
-  @override
-  String toString() => 'Comment(user: $user, text: $text)';
 }
 
-// امتیاز (ستاره)
+// ─────────────────────────────────────────────
+// امتیاز
+// ─────────────────────────────────────────────
 class Rating {
   final int id;
   final String user;
@@ -249,8 +244,47 @@ class Rating {
       value: json['value'] as int? ?? 0,
     );
   }
+}
 
-  @override
-  String toString() => 'Rating(user: $user, value: $value)';
-  
+// ─────────────────────────────────────────────
+// مدل لایو
+// ─────────────────────────────────────────────
+class Live {
+  final int id;
+  final String title;
+  final String? description;
+  final bool isActive;
+  final int viewerCount;
+  final String? thumbnailUrl;
+  final String? playbackUrl;
+  final DateTime? startTime;
+  final DateTime createdAt;
+
+  Live({
+    required this.id,
+    required this.title,
+    this.description,
+    this.isActive = false,
+    this.viewerCount = 0,
+    this.thumbnailUrl,
+    this.playbackUrl,
+    this.startTime,
+    required this.createdAt,
+  });
+
+  factory Live.fromJson(Map<String, dynamic> json) {
+    return Live(
+      id: json['id'] ?? 0,
+      title: json['title'] ?? 'لایو بدون عنوان',
+      description: json['description'],
+      isActive: json['is_active'] ?? false,
+      viewerCount: json['viewer_count'] ?? 0,
+      thumbnailUrl: json['thumbnail_url'],
+      playbackUrl: json['playback_url'] ?? json['hls_url'],
+      startTime: json['start_time'] != null
+          ? DateTime.tryParse(json['start_time'])
+          : null,
+      createdAt: DateTime.tryParse(json['created_at'] ?? '') ?? DateTime.now(),
+    );
+  }
 }

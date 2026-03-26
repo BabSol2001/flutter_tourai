@@ -5,6 +5,7 @@ import 'package:flutter_tourai/models/city.dart';
 import 'package:flutter_tourai/screens/media_gallery_screen.dart';
 import 'package:flutter_tourai/screens/city_attraction_detail.dart';
 import 'package:flutter_tourai/services/api_service.dart';
+import './screens/city_live_detail.dart'; // فایل تب لایو
 
 class CityDetailScreen extends StatefulWidget {
   final City city;
@@ -23,17 +24,18 @@ class _CityDetailScreenState extends State<CityDetailScreen>
   late final TabController _tabController;
   late final ApiService _apiService;
   late Future<List<Attraction>> _attractionsFuture;
+  late Future<List<Live>> _livesFuture;
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(length: 4, vsync: this);
     _apiService = ApiService();
 
-    // فقط یک بار درخواست جاذبه‌ها
     _attractionsFuture = _apiService.getAttractions(widget.city.id);
+    _livesFuture = _apiService.getLives(widget.city.id);
 
-    // لاگ رسانه‌های شهر
+    // لاگ رسانه‌ها (بدون تغییر)
     print("DEBUG - CityDetailScreen باز شد");
     print("DEBUG - نام شهر: ${widget.city.name}");
     print("DEBUG - ID شهر: ${widget.city.id}");
@@ -66,7 +68,7 @@ class _CityDetailScreenState extends State<CityDetailScreen>
       body: NestedScrollView(
         headerSliverBuilder: (context, innerBoxIsScrolled) => [
           SliverAppBar(
-            expandedHeight: size.height * 0.4,
+            expandedHeight: size.height * (isTablet ? 0.35 : 0.4),
             floating: false,
             pinned: true,
             backgroundColor: theme.appBarTheme.backgroundColor,
@@ -110,15 +112,21 @@ class _CityDetailScreenState extends State<CityDetailScreen>
               ),
               background: GestureDetector(
                 onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => MediaGalleryScreen(
-                        mediaItems: widget.city.mediaItems,
-                        initialIndex: 0,
+                  if (widget.city.mediaItems.isNotEmpty) {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => MediaGalleryScreen(
+                          mediaItems: widget.city.mediaItems,
+                          initialIndex: 0,
+                        ),
                       ),
-                    ),
-                  );
+                    );
+                  } else {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('رسانه‌ای برای نمایش وجود ندارد')),
+                    );
+                  }
                 },
                 child: Stack(
                   fit: StackFit.expand,
@@ -127,20 +135,20 @@ class _CityDetailScreenState extends State<CityDetailScreen>
                       builder: (context) {
                         CityMedia? imageMedia;
                         for (final m in widget.city.mediaItems.reversed) {
-                          if (m.mediaType == 'image' && m.url != null && m.url!.isNotEmpty) {
+                          if (m.mediaType == 'image' && m.url != null && m.url!.trim().isNotEmpty) {
                             imageMedia = m;
                             break;
                           }
                         }
 
-                        final bgUrl = _apiService.getFullMediaUrl(imageMedia?.url);
+                        final bgUrl = _apiService.getFullMediaUrl(imageMedia?.url ?? '');
 
                         print("DEBUG - URL نهایی بک‌گراند: $bgUrl");
 
                         return Image(
-                          image: bgUrl.startsWith('assets/')
-                              ? const AssetImage('assets/images/default_background.jpg')
-                              : NetworkImage(bgUrl),
+                          image: bgUrl.isNotEmpty && !bgUrl.startsWith('assets/')
+                              ? NetworkImage(bgUrl)
+                              : const AssetImage('assets/images/default_background.jpg'),
                           fit: BoxFit.cover,
                           loadingBuilder: (context, child, loadingProgress) {
                             if (loadingProgress == null) return child;
@@ -212,8 +220,11 @@ class _CityDetailScreenState extends State<CityDetailScreen>
                       indicatorColor: AppTheme.primary,
                       labelColor: AppTheme.primary,
                       unselectedLabelColor: textColor?.withOpacity(0.6),
+                      indicatorSize: TabBarIndicatorSize.tab,
+                      labelStyle: const TextStyle(fontWeight: FontWeight.bold),
                       tabs: const [
                         Tab(text: 'جاذبه‌ها'),
+                        Tab(text: 'لایو'),
                         Tab(text: 'داستان‌ها'),
                         Tab(text: 'غذا'),
                       ],
@@ -226,8 +237,10 @@ class _CityDetailScreenState extends State<CityDetailScreen>
         ],
         body: TabBarView(
           controller: _tabController,
+          physics: const BouncingScrollPhysics(), // اسکرول نرم‌تر بین تب‌ها
           children: [
             _buildAttractionsTab(theme, isTablet),
+            _buildLiveTab(),
             _buildStoriesTab(context, theme, isTablet),
             _buildFoodTab(theme, isTablet),
           ],
@@ -249,7 +262,7 @@ class _CityDetailScreenState extends State<CityDetailScreen>
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Text('خطا در بارگذاری جاذبه‌ها: ${snapshot.error}'),
+                Text('خطا در بارگذاری جاذبه‌ها: ${snapshot.error.toString().split('\n').first}'),
                 const SizedBox(height: 16),
                 ElevatedButton(
                   onPressed: () {
@@ -297,23 +310,21 @@ class _CityDetailScreenState extends State<CityDetailScreen>
     );
   }
 
+  Widget _buildLiveTab() {
+    return CityLiveTab(cityId: widget.city.id, livesFuture: _livesFuture);
+  }
+
+  // بقیه متدها (بدون تغییر بزرگ، فقط بهبود کوچک)
   Widget _buildAttractionCard(Attraction attraction, ThemeData theme) {
     final textColor = theme.textTheme.bodyMedium?.color;
 
-    // پیدا کردن اولین رسانه‌ای که url معتبر (غیر null و غیر خالی) دارد
     String imageUrl = 'assets/images/default_attraction.jpg';
-
-    // حلقه برای پیدا کردن اولین url معتبر (نه فقط اولی)
     for (final media in attraction.mediaItems) {
       if (media.url != null && media.url!.trim().isNotEmpty) {
         imageUrl = _apiService.getFullMediaUrl(media.url!);
-        debugPrint("DEBUG - جاذبه ${attraction.name} → عکس معتبر پیدا شد از رسانه id=${media.id}: ${media.url}");
         break;
       }
     }
-
-    // لاگ نهایی برای چک کردن
-    debugPrint("جاذبه ${attraction.name} → URL نهایی تامبنیل: $imageUrl");
 
     return Card(
       elevation: 0,
@@ -394,7 +405,7 @@ class _CityDetailScreenState extends State<CityDetailScreen>
     );
   }
 
-  // تب داستان‌ها (هاردکد - اگر بخوای واقعی بشه بگو)
+  // تب داستان‌ها و غذا (بدون تغییر بزرگ)
   Widget _buildStoriesTab(BuildContext context, ThemeData theme, bool isTablet) {
     final textColor = theme.textTheme.bodyMedium?.color;
 
@@ -408,7 +419,6 @@ class _CityDetailScreenState extends State<CityDetailScreen>
     );
   }
 
-  // تب غذا (هاردکد - اگر بخوای واقعی بشه بگو)
   Widget _buildFoodTab(ThemeData theme, bool isTablet) {
     final foods = [
       {'name': 'کروسان', 'price': '۸۰,۰۰۰ تومان'},

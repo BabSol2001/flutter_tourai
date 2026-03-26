@@ -1,10 +1,11 @@
-import 'package:apivideo_live_stream/apivideo_live_stream.dart';
 import 'package:flutter/material.dart';
+import 'package:better_player_plus/better_player_plus.dart';
+import 'package:camera/camera.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 class LiveStreamScreen extends StatefulWidget {
-  final String rtmpUrl; 
-  final String streamKey;
+  final String rtmpUrl;     // rtmp://your-server/live
+  final String streamKey;   // کلید استریم
 
   const LiveStreamScreen({
     super.key,
@@ -17,28 +18,27 @@ class LiveStreamScreen extends StatefulWidget {
 }
 
 class _LiveStreamScreenState extends State<LiveStreamScreen> with WidgetsBindingObserver {
-  // تعریف کنترلر اصلی پکیج
-  late ApiVideoLiveStreamController _controller;
-  
-  // متغیرهای کنترلی برای مدیریت وضعیت رابط کاربری
+  BetterPlayerController? _playerController;
+  CameraController? _cameraController;
+  List<CameraDescription>? _cameras;
+
   bool _isStreaming = false;
   bool _isInitialized = false;
   bool _isMuted = false;
+  bool _useFrontCamera = true;
 
   @override
   void initState() {
     super.initState();
-    // ثبت مشاهده‌گر برای مدیریت تغییرات وضعیت اپلیکیشن (بستن/باز کردن)
     WidgetsBinding.instance.addObserver(this);
-    _initializeController();
+    _initialize();
   }
 
   @override
   void dispose() {
-    // حذف مشاهده‌گر و آزادسازی منابع کنترلر برای جلوگیری از نشت حافظه
     WidgetsBinding.instance.removeObserver(this);
-    _controller.stopStreaming();
-    _controller.dispose();
+    _playerController?.dispose();
+    _cameraController?.dispose();
     super.dispose();
   }
 
@@ -46,180 +46,212 @@ class _LiveStreamScreenState extends State<LiveStreamScreen> with WidgetsBinding
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (!_isInitialized) return;
 
-    // اگر اپلیکیشن به پس‌زمینه رفت، استریم متوقف شود (به دلیل محدودیت‌های سیستم‌عامل)
     if (state == AppLifecycleState.inactive) {
-      _controller.stopStreaming();
+      _cameraController?.dispose();
+      _cameraController = null;
     } else if (state == AppLifecycleState.resumed) {
-      // بازگشت به اپلیکیشن و راه‌اندازی مجدد پیش‌نمایش دوربین
-      _controller.startPreview();
+      _initializeCamera();
     }
   }
 
-  Future<void> _initializeController() async {
-    // ۱. درخواست مجوزهای لازم به صورت همزمان
+  Future<void> _initialize() async {
+    // درخواست مجوزها
     final statuses = await [
       Permission.camera,
       Permission.microphone,
     ].request();
 
-    // بررسی اینکه آیا کاربر اجازه دسترسی داده است یا خیر
+    if (!mounted) return;
+
     if (statuses[Permission.camera]!.isDenied || statuses[Permission.microphone]!.isDenied) {
-      if (mounted) _showErrorDialog('عدم دسترسی', 'لطفاً دسترسی دوربین و میکروفون را تایید کنید.');
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('لطفاً دسترسی دوربین و میکروفون را بدهید')),
+      );
       return;
     }
 
-    // ۲. پیکربندی و ساخت کنترلر
-    _controller = ApiVideoLiveStreamController(
-      initialAudioConfig: AudioConfig(bitrate: 128 * 1024), // تنظیم کیفیت صدا
-      initialVideoConfig: VideoConfig.withDefaultBitrate(), // تنظیمات پیش‌فرض ویدیو
-      
-      // کال‌بک‌های مربوط به وضعیت اتصال
-      onConnectionSuccess: () {
-        if (mounted) setState(() => _isStreaming = true);
-      },
-      onConnectionFailed: (error) {
-        if (mounted) {
-          setState(() => _isStreaming = false);
-          _showErrorDialog('خطای اتصال', 'اتصال به سرور برقرار نشد: $error');
-        }
-      },
-      onDisconnection: () {
-        if (mounted) setState(() => _isStreaming = false);
-      },
-      onError: (error) {
-        if (mounted) _showErrorDialog('خطا', error.toString());
-      },
-    );
-
-    // ۳. راه‌اندازی فیزیکی دوربین و میکروفون
+    // لود دوربین‌ها یک بار
     try {
-      await _controller.initialize();
+      _cameras = await availableCameras();
+      await _initializeCamera();
+    } catch (e) {
+      debugPrint('خطا در لود دوربین‌ها: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('خطا در دسترسی به دوربین: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _initializeCamera() async {
+    if (_cameras == null || _cameras!.isEmpty) return;
+
+    try {
+      final selectedCamera = _useFrontCamera
+          ? _cameras!.firstWhere((c) => c.lensDirection == CameraLensDirection.front)
+          : _cameras!.firstWhere((c) => c.lensDirection == CameraLensDirection.back);
+
+      _cameraController = CameraController(
+        selectedCamera,
+        ResolutionPreset.high,
+        enableAudio: true,
+      );
+
+      await _cameraController!.initialize();
       if (mounted) {
         setState(() => _isInitialized = true);
       }
     } catch (e) {
-      if (mounted) _showErrorDialog('خطای سیستمی', 'راه‌اندازی دوربین با مشکل مواجه شد.');
+      debugPrint('خطا در راه‌اندازی دوربین: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('خطا در دوربین: $e')),
+        );
+      }
     }
   }
 
-  // متد شروع استریم
   Future<void> _startStreaming() async {
     if (!_isInitialized) return;
 
     try {
-      await _controller.startStreaming(
-        url: widget.rtmpUrl,
-        streamKey: widget.streamKey,
+      // ۱. فرض می‌کنیم بک‌اند HLS URL رو آماده کرده (یا بعد از شروع استریم می‌ده)
+      final hlsUrl = await _getHlsUrlFromBackend();
+
+      if (hlsUrl.isEmpty) throw Exception('HLS URL دریافت نشد');
+
+      final dataSource = BetterPlayerDataSource(
+        BetterPlayerDataSourceType.network,
+        hlsUrl,
+        bufferingConfiguration: const BetterPlayerBufferingConfiguration(
+          minBufferMs: 15000,
+          maxBufferMs: 60000,
+          bufferForPlaybackMs: 5000,
+        ),
       );
+
+      _playerController = BetterPlayerController(
+        const BetterPlayerConfiguration(
+          aspectRatio: 16 / 9,
+          autoPlay: true,
+          looping: false,
+          fit: BoxFit.contain,
+          handleLifecycle: true,
+        ),
+        betterPlayerDataSource: dataSource,
+      );
+
+      if (mounted) setState(() => _isStreaming = true);
     } catch (e) {
-      _showErrorDialog('خطا', 'امکان شروع پخش زنده وجود ندارد.');
+      debugPrint('خطا در شروع پخش: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('خطا در شروع پخش زنده: $e')),
+        );
+      }
     }
   }
 
-  // متد توقف استریم
+  Future<String> _getHlsUrlFromBackend() async {
+    // این تابع رو با ApiService واقعی جایگزین کن
+    // مثلاً: await ApiService().startLive(widget.streamKey);
+    await Future.delayed(const Duration(seconds: 2)); // شبیه‌سازی
+    return 'http://your-server/hls/${widget.streamKey}.m3u8';
+  }
+
   Future<void> _stopStreaming() async {
-    try {
-      await _controller.stopStreaming();
-      if (mounted) setState(() => _isStreaming = false);
-    } catch (e) {
-      debugPrint('Error stopping stream: $e');
-    }
+    await _playerController?.pause();
+    _playerController?.dispose();
+    _playerController = null;
+
+    if (mounted) setState(() => _isStreaming = false);
   }
 
-  // تغییر وضعیت بی‌صدا
   Future<void> _toggleMute() async {
+    if (_playerController == null) return;
+
     try {
-      await _controller.toggleMute();
-      setState(() => _isMuted = !_isMuted);
+      final newVolume = _isMuted ? 1.0 : 0.0;
+      await _playerController!.setVolume(newVolume);
+      if (mounted) setState(() => _isMuted = !_isMuted);
     } catch (e) {
-      debugPrint('Error toggling mute: $e');
+      debugPrint('خطا در تغییر صدا: $e');
     }
   }
 
-  // جابجایی بین دوربین جلو و عقب
   Future<void> _switchCamera() async {
-    try {
-      await _controller.switchCamera();
-    } catch (e) {
-      debugPrint('Error switching camera: $e');
-    }
-  }
+    if (!_isInitialized || _cameras == null) return;
 
-  void _showErrorDialog(String title, String message) {
-    if (!mounted) return;
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(title),
-        content: Text(message),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('فهمیدم')),
-        ],
-      ),
-    );
+    setState(() => _useFrontCamera = !_useFrontCamera);
+    await _cameraController?.dispose();
+    _cameraController = null;
+    await _initializeCamera();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.black, // ظاهر حرفه‌ای‌تر برای صفحه دوربین
+      backgroundColor: Colors.black,
       appBar: AppBar(
-        title: const Text('پخش زنده (Live)'),
+        title: const Text('پخش زنده'),
         backgroundColor: Colors.transparent,
         elevation: 0,
       ),
       body: SafeArea(
         child: Column(
           children: [
-            // نمایش پیش‌نمایش دوربین
-           // بخش اصلاح شده در متد build
             Expanded(
-              child: ClipRRect( // به جای Container از ClipRRect استفاده کنید
-                borderRadius: BorderRadius.circular(12), // اگر مایلید لبه‌ها کمی گرد باشند
-                child: _isInitialized
-                    ? ApiVideoCameraPreview(controller: _controller)
-                    : const Center(child: CircularProgressIndicator(color: Colors.orange)),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: _isStreaming && _playerController != null
+                    ? BetterPlayer(controller: _playerController!)
+                    : _isInitialized && _cameraController != null && _cameraController!.value.isInitialized
+                        ? CameraPreview(_cameraController!)
+                        : const Center(child: CircularProgressIndicator(color: Colors.orange)),
               ),
             ),
-            
-            // بخش دکمه‌های کنترلی
+
             Container(
               padding: const EdgeInsets.symmetric(vertical: 20),
               color: Colors.black87,
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
-                  // دکمه چرخش دوربین
                   IconButton(
-                    icon: const Icon(Icons.flip_camera_ios, size: 32, color: Colors.white),
+                    icon: Icon(
+                      _useFrontCamera ? Icons.flip_camera_ios : Icons.flip_camera_android,
+                      size: 32,
+                      color: Colors.white,
+                    ),
                     onPressed: _isInitialized ? _switchCamera : null,
                   ),
-                  
-                  // دکمه اصلی شروع/توقف
+
                   GestureDetector(
-                    onTap: _isInitialized ? (_isStreaming ? _stopStreaming : _startStreaming) : null,
+                    onTap: _isInitialized
+                        ? (_isStreaming ? _stopStreaming : _startStreaming)
+                        : null,
                     child: Container(
-                      padding: const EdgeInsets.all(12),
+                      padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
                         color: _isStreaming ? Colors.red : Colors.green,
                         shape: BoxShape.circle,
                       ),
                       child: Icon(
                         _isStreaming ? Icons.stop : Icons.videocam,
-                        size: 40,
+                        size: 48,
                         color: Colors.white,
                       ),
                     ),
                   ),
 
-                  // دکمه صدا (Mute)
                   IconButton(
                     icon: Icon(
                       _isMuted ? Icons.mic_off : Icons.mic,
                       size: 32,
                       color: _isMuted ? Colors.red : Colors.white,
                     ),
-                    onPressed: _isInitialized ? _toggleMute : null,
+                    onPressed: _isStreaming ? _toggleMute : null,
                   ),
                 ],
               ),
