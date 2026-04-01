@@ -118,7 +118,7 @@ class _NavigationMapScreenState extends State<NavigationMapScreen>
   bool _showBikePathsLayer = false;
   bool _showPedestrianPathsLayer = false;
 
-  static const String baseUrl = "http://192.168.0.105:8000";
+  static const String baseUrl = "http://192.168.0.147:8000";
 
   final List<Map<String, dynamic>> transportModes = [
     {"mode": "auto", "engine": "valhalla", "name": "ماشین", "icon": Icons.directions_car},

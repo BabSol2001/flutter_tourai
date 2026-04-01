@@ -13,7 +13,7 @@ class TravelPlanScreen extends StatefulWidget {
 }
 
 class _TravelPlanScreenState extends State<TravelPlanScreen> {
-  final dio = Dio(BaseOptions(baseUrl: 'http://192.168.0.105:8000/api/v1/'));
+  final dio = Dio(BaseOptions(baseUrl: 'http://192.168.0.147:8000/api/v1/'));
   final _formKey = GlobalKey<FormState>();
 
   String cities = '';
