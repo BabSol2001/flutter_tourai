@@ -205,20 +205,29 @@ class Comment {
   final String user;
   final String text;
   final String createdAt;
+  final int? parent; // آیدی کامنت والد
+  final List<Comment> replies; // لیست پاسخ‌ها
 
   Comment({
     required this.id,
     required this.user,
     required this.text,
     required this.createdAt,
+    this.parent,
+    this.replies = const [],
   });
 
   factory Comment.fromJson(Map<String, dynamic> json) {
+    var repliesFromJson = json['replies'] as List? ?? [];
+    List<Comment> repliesList = repliesFromJson.map((i) => Comment.fromJson(i)).toList();
+    
     return Comment(
       id: json['id'] as int? ?? 0,
       user: json['user'] as String? ?? 'ناشناس',
       text: json['text'] as String? ?? '',
       createdAt: json['created_at'] as String? ?? '',
+      parent: json['parent'],
+      replies: repliesList,
     );
   }
 }

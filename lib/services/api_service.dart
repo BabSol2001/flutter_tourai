@@ -27,6 +27,7 @@ class ApiService {
         headers: {
           'Accept': 'application/json',
           'Content-Type': 'application/json',
+          'Authorization': 'Token 29f7c42e4ae769e0e67c28d4219ed2a3a4c3fe7e'
         },
       ),
     );
@@ -210,15 +211,32 @@ Future<void> likeAttraction(int cityId, int attractionId) async {
 // ------------------------------
 // Attraction Comment
 // ------------------------------
-Future<void> commentAttraction(int cityId, int attractionId, String text) async {
+Future<void> commentAttraction(
+  int cityId, 
+  int attractionId, 
+  String text, 
+  {int? parentId} // اضافه کردن parentId به صورت اختیاری
+) async {
   try {
+    // ایجاد بدنه درخواست
+    final Map<String, dynamic> requestData = {
+      'text': text,
+    };
+
+    // اگر parentId فرستاده شده بود، آن را به دیتا اضافه کن
+    if (parentId != null) {
+      requestData['parent'] = parentId;
+    }
+
     await _dio.post(
       'cities/cities/$cityId/attractions/$attractionId/comment/',
-      data: {'text': text},
+      data: requestData,
     );
 
   } catch (e) {
-    _handleDioError(e as DioException);
+    if (e is DioException) {
+      _handleDioError(e);
+    }
     rethrow;
   }
 }

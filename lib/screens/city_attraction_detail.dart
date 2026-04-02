@@ -442,7 +442,7 @@ class _CityAttractionDetailScreenState extends State<CityAttractionDetailScreen>
       expand: false,
       builder: (context, scrollController) {
         return Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
           child: Column(
             children: [
               Container(
@@ -489,6 +489,7 @@ class _CityAttractionDetailScreenState extends State<CityAttractionDetailScreen>
                   ],
                 ),
               ),
+              
               const SizedBox(height: 8),
               TextField(
                 controller: commentController,
