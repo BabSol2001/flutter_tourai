@@ -2,7 +2,6 @@
 
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart'; // برای kDebugMode
-
 import '../models/city.dart'; // شامل City و Attraction
 
 class ApiService {
@@ -158,7 +157,22 @@ class ApiService {
     }
   }
 
-
+  Future<void> createAttraction({
+    required int cityId,
+    required String name,
+    required String description,
+  }) async {
+    // اگر فایل داری، از FormData استفاده کن
+    final response = await _dio.post(
+      '/api/v1/cities/cities/$cityId/attractions/',
+      data: {
+        'name': name,
+        'description': description,
+        // سایر فیلدهای لازم برای مدل Attraction
+      },
+    );
+    if (response.statusCode != 201) throw Exception('Failed to create');
+  }
 
   // ────────────────────────────────────────────────
   //                  متدهای کمکی
@@ -202,8 +216,8 @@ Future<void> likeAttraction(int cityId, int attractionId) async {
     await _dio.post(
       'cities/cities/$cityId/attractions/$attractionId/like/',
     );
-  } catch (e) {
-    _handleDioError(e as DioException);
+  } on DioException catch (e) { 
+    _handleDioError(e);
     rethrow;
   }
 }
@@ -215,28 +229,46 @@ Future<void> commentAttraction(
   int cityId, 
   int attractionId, 
   String text, 
-  {int? parentId} // اضافه کردن parentId به صورت اختیاری
+  {int? parentId, 
+  String? imagePath} // اضافه شدن مسیر عکس
 ) async {
-  try {
-    // ایجاد بدنه درخواست
-    final Map<String, dynamic> requestData = {
+try {
+    // استفاده از FormData برای ارسال فایل و متن با هم
+    final formData = FormData.fromMap({
       'text': text,
-    };
-
-    // اگر parentId فرستاده شده بود، آن را به دیتا اضافه کن
-    if (parentId != null) {
-      requestData['parent'] = parentId;
-    }
+      if (parentId != null) 'parent': parentId,
+      if (imagePath != null) 
+        'image': await MultipartFile.fromFile(imagePath, filename: 'comment_img.jpg'),
+    });
 
     await _dio.post(
       'cities/cities/$cityId/attractions/$attractionId/comment/',
-      data: requestData,
+      data: formData,
     );
+  } on DioException catch (e) {
+    _handleDioError(e);
+    rethrow;
+  }
+}
 
-  } catch (e) {
-    if (e is DioException) {
-      _handleDioError(e);
-    }
+Future<void> deleteComment(int cityId, int attractionId, int commentId) async {
+  try {
+    await _dio.delete(
+      'cities/cities/$cityId/attractions/$attractionId/comments/$commentId/',
+    );
+  } on DioException catch (e) {
+    _handleDioError(e);
+    rethrow;
+  }
+}
+
+Future<void> togglePinComment(int cityId, int attractionId, int commentId) async {
+  try {
+    await _dio.post(
+      'cities/cities/$cityId/attractions/$attractionId/comments/$commentId/pin/',
+    );
+  } on DioException catch (e) {
+    _handleDioError(e);
     rethrow;
   }
 }
@@ -251,13 +283,11 @@ Future<void> rateAttraction(int cityId, int attractionId, int score) async {
       data: {'score': score},
     );
 
-  } catch (e) {
-    _handleDioError(e as DioException);
+  } on DioException catch (e) { 
+    _handleDioError(e);
     rethrow;
   }
 }
 
-
-
-  // می‌تونی متدهای دیگه  رو هم اینجا اضافه کنی
+// می‌تونی متدهای دیگه  رو هم اینجا اضافه کنی
 }

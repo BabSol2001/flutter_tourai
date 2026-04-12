@@ -56,6 +56,8 @@ dependencies:
   web_socket_channel: ^3.0.3
   rtmp_streaming: ^1.0.3
   camera: ^0.12.0
+  io: ^1.0.5
+  image_picker: ^1.2.1
 
   # ── پکیج‌های جدید برای پخش زنده (جایگزین apivideo_live_stream)
    # برای ارسال RTMP از داخل اپ (اختیاری - اگر فقط viewer می‌خوای می‌تونی حذفش کنی)

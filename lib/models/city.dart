@@ -207,15 +207,36 @@ class Comment {
   final String createdAt;
   final int? parent; // آیدی کامنت والد
   final List<Comment> replies; // لیست پاسخ‌ها
+  final bool isPinned;
 
   Comment({
     required this.id,
     required this.user,
     required this.text,
     required this.createdAt,
+    this.isPinned = false,
     this.parent,
     this.replies = const [],
   });
+
+  Comment copyWith({
+    int? id,
+    String? user,
+    String? text,
+    int? parent,
+    bool? isPinned,
+    String? createdAt,
+  }) {
+    return Comment(
+      id: id ?? this.id,
+      user: user ?? this.user,
+      text: text ?? this.text,
+      parent: parent ?? this.parent,
+      isPinned: isPinned ?? this.isPinned,
+      createdAt: createdAt ?? this.createdAt,
+    );
+  }
+
 
   factory Comment.fromJson(Map<String, dynamic> json) {
     var repliesFromJson = json['replies'] as List? ?? [];
@@ -226,8 +247,9 @@ class Comment {
       user: json['user'] as String? ?? 'ناشناس',
       text: json['text'] as String? ?? '',
       createdAt: json['created_at'] as String? ?? '',
-      parent: json['parent'],
+      parent: json['parent'] as int?,
       replies: repliesList,
+      isPinned: json['is_pinned'] ?? false, // مپ کردن از جیسون
     );
   }
 }
