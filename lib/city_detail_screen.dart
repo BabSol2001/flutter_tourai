@@ -6,7 +6,7 @@ import 'package:flutter_tourai/screens/media_gallery_screen.dart';
 import 'package:flutter_tourai/screens/city_attraction_detail.dart';
 import 'package:flutter_tourai/services/api_service.dart';
 import './screens/city_live_detail.dart'; // فایل تب لایو
-
+import './screens/add_attraction_sheet.dart';//برای اضافه کردن یک جاذبه جدید
 class CityDetailScreen extends StatefulWidget {
   final City city;
 
@@ -250,63 +250,101 @@ class _CityDetailScreenState extends State<CityDetailScreen>
   }
 
   Widget _buildAttractionsTab(ThemeData theme, bool isTablet) {
-    return FutureBuilder<List<Attraction>>(
-      future: _attractionsFuture,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
-        }
+    // استفاده از استک برای قرار دادن دکمه روی لیست
+    return Stack (
+      children: [
+        FutureBuilder<List<Attraction>>(
+          future: _attractionsFuture,
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(child: CircularProgressIndicator());
+            }
 
-        if (snapshot.hasError) {
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text('خطا در بارگذاری جاذبه‌ها: ${snapshot.error.toString().split('\n').first}'),
-                const SizedBox(height: 16),
-                ElevatedButton(
-                  onPressed: () {
-                    setState(() {
-                      _attractionsFuture = _apiService.getAttractions(widget.city.id);
-                    });
-                  },
-                  child: const Text('تلاش مجدد'),
+            if (snapshot.hasError) {
+              return Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text('خطا در بارگذاری جاذبه‌ها: ${snapshot.error.toString().split('\n').first}'),
+                    const SizedBox(height: 16),
+                    ElevatedButton(
+                      onPressed: () {
+                        setState(() {
+                          _attractionsFuture = _apiService.getAttractions(widget.city.id);
+                        });
+                      },
+                      child: const Text('تلاش مجدد'),
+                    ),
+                  ],
                 ),
-              ],
-            ),
-          );
-        }
+              );
+            }
 
-        final attractions = snapshot.data ?? [];
+            final attractions = snapshot.data ?? [];
 
-        if (attractions.isEmpty) {
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.location_city_outlined, size: 80, color: Colors.grey),
-                const SizedBox(height: 16),
-                const Text('هنوز جاذبه‌ای برای این شهر ثبت نشده', style: TextStyle(color: Colors.grey)),
-              ],
-            ),
-          );
-        }
+            if (attractions.isEmpty) {
+              return Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.location_city_outlined, size: 80, color: Colors.grey),
+                    const SizedBox(height: 16),
+                    const Text('هنوز جاذبه‌ای برای این شهر ثبت نشده', style: TextStyle(color: Colors.grey)),
+                  ],
+                ),
+              );
+            }
 
-        return GridView.builder(
-          padding: const EdgeInsets.all(16),
-          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: isTablet ? 3 : 2,
-            crossAxisSpacing: 16,
-            mainAxisSpacing: 16,
-            childAspectRatio: 0.9,
-          ),
-          itemCount: attractions.length,
-          itemBuilder: (context, index) {
-            final attraction = attractions[index];
-            return _buildAttractionCard(attraction, theme);
+            return GridView.builder(
+              padding: const EdgeInsets.all(16),
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: isTablet ? 3 : 2,
+                crossAxisSpacing: 16,
+                mainAxisSpacing: 16,
+                childAspectRatio: 0.9,
+              ),
+              itemCount: attractions.length,
+              itemBuilder: (context, index) {
+                final attraction = attractions[index];
+                return _buildAttractionCard(attraction, theme);
+              },
+            );
           },
-        );
-      },
+        ),
+        // دکمه شناور روی تب
+        Positioned(
+          bottom: 20,
+          left: 20,
+          child: Tooltip(
+            message: 'اضافه کردن جاذبه جدید',
+            verticalOffset: 48,
+            preferBelow: false,
+            child: FloatingActionButton(
+              backgroundColor: Colors.blueAccent,
+              elevation: 4,
+              onPressed: _showAddAttractionDialog,
+              child: const Icon(Icons.add, color: Colors.white),
+            ),
+          ),
+        ),
+      ]
+    );
+  }
+
+  void _showAddAttractionDialog() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true, // برای اینکه کیبورد روی فیلدها را نپوشاند
+      backgroundColor: Colors.transparent,
+      builder: (context) => AddAttractionSheet(
+        cityId: widget.city.id, // آیدی شهر را به شیت پاس می‌دهیم
+        onUploadSuccess: () {
+          // بعد از آپلود موفق، لیست را رفرش می‌کنیم
+          setState(() {
+            _attractionsFuture = _apiService.getAttractions(widget.city.id);
+          });
+        },
+      ),
     );
   }
 

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'dart:io'; // برای کار با شیء File
+import 'add_attraction_sheet.dart';
 import 'package:image_picker/image_picker.dart'; // برای انتخاب عکس
 import 'package:carousel_slider/carousel_slider.dart';
 import 'package:flutter/services.dart'; // برای دسترسی به Clipboard
@@ -140,77 +141,15 @@ class _CityAttractionDetailScreenState extends State<CityAttractionDetailScreen>
   }
 
   void _showAddAttractionDialog() {
-    final nameController = TextEditingController();
-    final descController = TextEditingController();
-    // در پروژه‌های واقعی اینجا از ImagePicker برای انتخاب ویدیو/عکس استفاده می‌شود
-    
     showModalBottomSheet(
       context: context,
-      isScrollControlled: true, // برای اینکه کیبورد روی فیلدها را نپوشاند
-      backgroundColor: const Color(0xFF1A1A1A),
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
-      ),
-      builder: (context) => Padding(
-        padding: EdgeInsets.only(
-          bottom: MediaQuery.of(context).viewInsets.bottom, // هماهنگی با کیبورد
-          left: 20, right: 20, top: 20,
-        ),
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Center(child: _buildHandle()),
-              const Text(
-                'افزودن جاذبه جدید',
-                style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 20),
-              
-              _buildTextField(nameController, 'نام جاذبه (مثلاً: پل خواجو)'),
-              const SizedBox(height: 15),
-              _buildTextField(descController, 'توضیحات کوتاه', maxLines: 3),
-              const SizedBox(height: 20),
-              
-              // دکمه انتخاب فایل (فعلاً دکوری تا Picker را اضافه کنیم)
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(15),
-                decoration: BoxDecoration(
-                  border: Border.all(color: Colors.white24),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Row(
-                  children: [
-                    Icon(Icons.video_library, color: Colors.blueAccent),
-                    SizedBox(width: 10),
-                    Text('انتخاب ویدیو یا تصویر', style: TextStyle(color: Colors.white70)),
-                  ],
-                ),
-              ),
-              
-              const SizedBox(height: 30),
-              
-              SizedBox(
-                width: double.infinity,
-                height: 50,
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.blueAccent,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                  onPressed: () => _submitNewAttraction(
-                    nameController.text, 
-                    descController.text
-                  ),
-                  child: const Text('ثبت و انتشار', style: TextStyle(color: Colors.white, fontSize: 16)),
-                ),
-              ),
-              const SizedBox(height: 20),
-            ],
-          ),
-        ),
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => AddAttractionSheet(
+        cityId: widget.cityId,
+        onUploadSuccess: () {
+          // اینجا لیست رو رفرش می‌کنی
+        },
       ),
     );
   }
