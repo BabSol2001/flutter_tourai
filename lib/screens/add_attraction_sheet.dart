@@ -2,6 +2,8 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import './video_thumbnail_widget.dart';
+import '../services/photo_editor_page.dart';
+
 
 class AddAttractionSheet extends StatefulWidget {
   final int cityId;
@@ -340,8 +342,28 @@ class _AddAttractionSheetState extends State<AddAttractionSheet> {
     showModalBottomSheet(
       context: context,
       backgroundColor: const Color(0xFF1E1E1E),
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (context) => Wrap(
         children: [
+          // گزینه ویرایش (جدید)
+          ListTile(
+            leading: Icon(selectedItem.isVideo ? Icons.video_settings : Icons.photo_filter, color: Colors.greenAccent),
+            title: Text(selectedItem.isVideo ? "ویرایش ویدیو" : "ویرایش عکس", style: const TextStyle(color: Colors.white)),
+            onTap: () {
+              Navigator.pop(context);
+              _navigateToEditor(selectedItem); // رفتن به صفحه ادیت
+            },
+          ),
+          // گزینه جابه‌جایی
+          ListTile(
+            leading: const Icon(Icons.reorder, color: Colors.blueAccent),
+            title: const Text("جابه‌جایی آیتم‌ها", style: TextStyle(color: Colors.white)),
+            onTap: () {
+              Navigator.pop(context);
+              setState(() => _isReorderMode = true);
+            },
+          ),
+          // گزینه حذف
           ListTile(
             leading: const Icon(Icons.delete_sweep, color: Colors.redAccent),
             title: const Text("حذف چندتایی", style: TextStyle(color: Colors.white)),
@@ -353,19 +375,26 @@ class _AddAttractionSheetState extends State<AddAttractionSheet> {
               });
             },
           ),
-          ListTile(
-            leading: const Icon(Icons.reorder, color: Colors.blueAccent),
-            title: const Text("جابه‌جایی آیتم‌ها", style: TextStyle(color: Colors.white)),
-            onTap: () {
-              Navigator.pop(context);
-              setState(() {
-                _isReorderMode = true;
-              });
-            },
-          ),
         ],
       ),
     );
   }
-  
+
+  void _navigateToEditor(MediaItem item) async {
+    File? editedFile;
+
+    if (item.isVideo) {
+      // رفتن به صفحه ادیت ویدیو (فعلاً اسکلت رو می‌سازیم)
+      // editedFile = await Navigator.push(context, MaterialPageRoute(builder: (_) => VideoEditorPage(file: item.file)));
+    } else {
+      // رفتن به صفحه ادیت عکس و منتظر ماندن برای نتیجه (await)
+      final File? editedFile = await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => PhotoEditorPage(file: item.file),
+        ),
+      );
+    }
+  }
+
 }
