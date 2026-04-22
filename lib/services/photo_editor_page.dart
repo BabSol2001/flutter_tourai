@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
+import 'dart:math';
 
 import '../logic/editor/aspect_ratio_handler.dart';
 
@@ -37,11 +38,34 @@ class _PhotoEditorPageState extends State<PhotoEditorPage> {
 
   bool _showZoomMenu = false; // برای باز و بسته شدن لیست درصدها
 
+  // ۱۵ درجه به رادیان (15 * pi / 180)
+  final double _rotateStep = 0.2618;
+  bool _showrotateMenu = false; // برای باز و بسته شدن لیست درصدها
+
+  void _changeRotation(bool clockwise) {
+    setState(() {
+      if (clockwise) {
+        _rotationAngle += _rotateStep;
+      } else {
+        _rotationAngle -= _rotateStep;
+      }
+    });
+  }
+
+  void _resetRotation() {
+    setState(() {
+      _rotationAngle = 0.0;
+    });
+  }
+
   @override
   void initState() {
     super.initState();
     _currentFile = widget.file; // در ابتدا، فایل فعلی همان فایل ورودی است
   
+    // اضافه کردن این خط برای استخراج ابعاد واقعی عکس
+    _getImageDimensions(FileImage(_currentFile));
+
     // اولین مرحله تاریخچه با فایل اصلی
     _historySteps = [
       EditStep("اصلی", {
@@ -182,164 +206,351 @@ class _PhotoEditorPageState extends State<PhotoEditorPage> {
     );
   }
 
-  void _setZoomLevel(double scale) {
+  void _changeZoomStep(bool increase) {
+    final Matrix4 currentMatrix = _transformationController.value;
+    double currentScale = currentMatrix.getMaxScaleOnAxis();
+    double newScale = increase ? currentScale + 0.25 : currentScale - 0.25;
+    newScale = newScale.clamp(0.5, 4.0);
+    
+    double factor = newScale / currentScale;
+
     setState(() {
-      // ایجاد یک ماتریس که فقط مقیاس (Scale) را تغییر می‌دهد
-      _transformationController.value = Matrix4.identity()..scale(scale);
-      _showZoomMenu = false; // بستن منو بعد از انتخاب
+      // استفاده از Matrix4.copy برای اطمینان از تعریف متد
+      _transformationController.value = Matrix4.copy(currentMatrix)..scale(factor);
     });
   }
 
+  void _resetZoom() {
+    setState(() {
+      // بازگرداندن ماتریس به حالت پیش‌فرض (بدون زوم و جابه‌جایی)
+      _transformationController.value = Matrix4.identity();
+    });
+  }
+
+  double _rawImageWidth = 0;
+  double _rawImageHeight = 0;
+
+  // موقعی که عکس لود میشه (ImageStream)
+  void _getImageDimensions(ImageProvider provider) {
+    provider.resolve(const ImageConfiguration()).addListener(
+      ImageStreamListener((ImageInfo info, bool _) {
+        setState(() {
+          _rawImageWidth = info.image.width.toDouble();
+          _rawImageHeight = info.image.height.toDouble();
+        });
+      }),
+    );
+  }
+
+ void _fitToScreen() {
+  // ۱. پیدا کردن ابعاد منطقه‌ای که عکس در آن نمایش داده می‌شود
+  // ما از context استفاده می‌کنیم تا ابعاد دقیق Expanded رو بگیریم
+  final RenderBox? box = context.findRenderObject() as RenderBox?;
+  if (box == null || _rawImageWidth == 0) return;
+
+  // ابعاد کل صفحه
+  final size = box.size;
+  
+  // کسر فضای پنل سمت چپ و حاشیه‌ها برای رسیدن به فضای خالص نمایش
+  final double availableWidth = size.width - 60; 
+  final double availableHeight = size.height - 180; 
+
+  // ۲. محاسبه ابعاد اشغال شده توسط عکس در زاویه فعلی (Bounding Box)
+  final double angle = _rotationAngle;
+  final double cosA = cos(angle).abs();
+  final double sinA = sin(angle).abs();
+  
+  // ابعاد عکس چرخیده
+  final double rotatedW = (_rawImageWidth * cosA) + (_rawImageHeight * sinA);
+  final double rotatedH = (_rawImageWidth * sinA) + (_rawImageHeight * cosA);
+
+  // ۳. محاسبه اسکیل دقیق برای "گوش‌ تا گوش"
+  double scaleX = availableWidth / rotatedW;
+  double scaleY = availableHeight / rotatedH;
+  
+  // انتخاب عدد کوچکتر برای اینکه عکس از صفحه بیرون نزند
+  double finalScale = min(scaleX, scaleY);
+
+  // ۴. اعمال به TransformationController بدون تغییر زاویه
+  setState(() {
+    // محاسبه مرکز منطقه نمایش
+    final double centerX = (size.width - 50) / 2 + 50;
+    final double centerY = size.height / 2;
+
+    _transformationController.value = Matrix4.identity()
+      ..translate(centerX, centerY)
+      ..scale(finalScale)
+      // توجه: چون چرخاندن را در Transform.rotate انجام می‌دهی، 
+      // اینجا در ماتریس نباید rotateZ اضافه کنی، وگرنه دوبار می‌چرخد.
+      ..translate(-_rawImageWidth / 2, -_rawImageHeight / 2);
+  });
+}
+
   Widget _buildDynamicTopPanel() {
-    return AnimatedPositioned(
-      duration: const Duration(milliseconds: 400),
-      curve: Curves.easeInOut,
-      top: _showHelp ? 110 : 20,
-      left: 80, // برای ایجاد فاصله از پنل ابزار عمودی
-      right: 15,
-      child: Row(
-        children: [
-          // ۱. دکمه ذخیره (سمت چپ - قرینه هلپ)
-          _buildActionButton(
-            icon: Icons.save_rounded, // آیکون معروف فلاپی‌دیسک
-            color: Colors.greenAccent, // همون رنگ سبزِ تایید
-            onPressed: _saveFinalImage, // متدی که در ادامه تعریف می‌کنیم
-          ),
-
-          const SizedBox(width: 10),
-
-          // ۲. بخش Undo/Redo (مرکز)
-          Expanded(
-            child: Container(
-              height: 45,
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(25),
-                border: Border.all(color: Colors.white10),
-              ),
-              child: Row(
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.undo, color: Colors.white, size: 20),
-                    onPressed: _currentStepIndex > 0 ? () => _goToStep(_currentStepIndex - 1) : null,
-                  ),
-                  Expanded(
-                    child: ListView.builder(
-                      scrollDirection: Axis.horizontal,
-                      itemCount: _historySteps.length,
-                      itemBuilder: (context, index) {
-                        bool isActive = index == _currentStepIndex;
-                        // بررسی اینکه آیا این مرحله قبل یا مساوی آخرین مرحله ذخیره شده است
-                        bool isSaved = index <= _lastSavedStepIndex; 
-
-                        return GestureDetector(
-                          onTap: () => _goToStep(index),
-                          child: AnimatedContainer(
-                            duration: const Duration(milliseconds: 200),
-                            alignment: Alignment.center,
-                            padding: const EdgeInsets.symmetric(horizontal: 12),
-                            margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
-                            decoration: BoxDecoration(
-                              // اگر ذخیره شده باشد -> پس‌زمینه سبز کدر یا روشن
-                              // اگر ذخیره نشده باشد -> فقط خط دور (Outline)
-                              color: isSaved 
-                                  ? Colors.greenAccent.withOpacity(isActive ? 0.8 : 0.3) 
-                                  : Colors.transparent,
-                              borderRadius: BorderRadius.circular(15),
-                              border: Border.all(
-                                color: isSaved ? Colors.greenAccent : Colors.white30,
-                                width: 1,
-                              ),
-                            ),
-                            child: Text(
-                              _historySteps[index].label,
-                              style: TextStyle(
-                                color: isSaved ? Colors.white : Colors.white60,
-                                fontSize: 10,
-                                fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
-                              ),
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.redo, color: Colors.white, size: 20),
-                    onPressed: _currentStepIndex < _historySteps.length - 1 ? () => _goToStep(_currentStepIndex + 1) : null,
-                  ),
-                ],
-              ),
+  return AnimatedPositioned(
+    duration: const Duration(milliseconds: 400),
+    curve: Curves.easeInOut,
+    top: _showHelp ? 110 : 20,
+    left: 80,
+    right: 15,
+    // تغییر ۱: ارتفاع ثابت می‌دهیم تا با باز شدن منو، کل پنل جابه‌جا نشود
+    height: 220, 
+    child: Stack( // تغییر ۲: استفاده از استک داخلی برای مدیریت لایه زوم
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // ۱. دکمه ذخیره
+            _buildActionButton(
+              icon: Icons.save_rounded,
+              color: Colors.greenAccent,
+              onPressed: _saveFinalImage,
             ),
-          ),
 
-          const SizedBox(width: 10),
+            const SizedBox(width: 10),
 
-          // ۳. پنل عمودی سمت راست (هلپ و ریست زوم)
-          Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // دکمه هلپ
-              _buildActionButton(
-                icon: _isHelpModeActive ? Icons.help_rounded : Icons.help_outline_rounded,
-                color: _isHelpModeActive ? Colors.yellowAccent : Colors.white70,
-                onPressed: () {
-                  setState(() {
-                    _isHelpModeActive = !_isHelpModeActive;
-                    _showHelp = _isHelpModeActive;
-                  });
-                },
-              ),
-              
-              const SizedBox(height: 8), // فاصله عمودی بین دو دکمه
-
-              // بخش کنترل زوم
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // الف) لیست افقی درصدها (فقط وقتی منو باز است)
-                  if (_showZoomMenu)
-                    AnimatedContainer(
-                      duration: const Duration(milliseconds: 300),
-                      margin: const EdgeInsets.only(right: 8),
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: Colors.black87,
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: Colors.white24),
-                      ),
-                      child: Row(
-                        children: [0.25, 0.5, 0.75, 1.0, 1.5, 2.0, 4.0].map((level) {
-                          return Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 4),
-                            child: GestureDetector(
-                              onTap: () => _setZoomLevel(level),
+            // ۲. بخش Undo/Redo
+            Expanded(
+              child: Container(
+                height: 45,
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(25),
+                  border: Border.all(color: Colors.white10),
+                ),
+                child: Row(
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.undo, color: Colors.white, size: 20),
+                      onPressed: _currentStepIndex > 0 ? () => _goToStep(_currentStepIndex - 1) : null,
+                    ),
+                    Expanded(
+                      child: ListView.builder(
+                        scrollDirection: Axis.horizontal,
+                        itemCount: _historySteps.length,
+                        itemBuilder: (context, index) {
+                          bool isActive = index == _currentStepIndex;
+                          bool isSaved = index <= _lastSavedStepIndex;
+                          return GestureDetector(
+                            onTap: () => _goToStep(index),
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 200),
+                              alignment: Alignment.center,
+                              padding: const EdgeInsets.symmetric(horizontal: 12),
+                              margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: isSaved
+                                    ? Colors.greenAccent.withOpacity(isActive ? 0.8 : 0.3)
+                                    : Colors.transparent,
+                                borderRadius: BorderRadius.circular(15),
+                                border: Border.all(
+                                  color: isSaved ? Colors.greenAccent : Colors.white30,
+                                  width: 1,
+                                ),
+                              ),
                               child: Text(
-                                "${(level * 100).toInt()}%",
-                                style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                                _historySteps[index].label,
+                                style: TextStyle(
+                                  color: isSaved ? Colors.white : Colors.white60,
+                                  fontSize: 10,
+                                  fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
+                                ),
                               ),
                             ),
                           );
-                        }).toList(),
+                        },
                       ),
                     ),
+                    IconButton(
+                      icon: const Icon(Icons.redo, color: Colors.white, size: 20),
+                      onPressed: _currentStepIndex < _historySteps.length - 1 ? () => _goToStep(_currentStepIndex + 1) : null,
+                    ),
+                  ],
+                ),
+              ),
+            ),
 
-                  // ب) دکمه اصلی زوم
-                  _buildActionButton(
-                    icon: Icons.center_focus_strong,
-                    color: _showZoomMenu ? Colors.blueAccent : Colors.white70,
-                    onPressed: () {
-                      setState(() {
-                        _showZoomMenu = !_showZoomMenu; // باز و بسته کردن منو
-                      });
-                    },
-                  ),
-                ],
+            const SizedBox(width: 10),
+
+          // ۳. دکمه‌های سمت راست (Help و Zoom)
+          Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // دکمه راهنما
+              _buildActionButton(
+                icon: _isHelpModeActive ? Icons.help_rounded : Icons.help_outline_rounded,
+                color: _isHelpModeActive ? Colors.yellowAccent : Colors.white70,
+                onPressed: () => setState(() {
+                  _isHelpModeActive = !_isHelpModeActive;
+                  _showHelp = _isHelpModeActive;
+                }),
+              ),
+              
+              const SizedBox(height: 11),
+              
+              // دکمه اصلی باز و بسته کردن منوی زوم
+              _buildActionButton(
+                icon: Icons.center_focus_strong,
+                color: _showZoomMenu ? Colors.blueAccent : Colors.white70,
+                onPressed: () => setState(() => _showZoomMenu = !_showZoomMenu),
+              ),
+
+              const SizedBox(height: 11),
+              // دکمه چرخش (جدید)
+              _buildActionButton(
+                icon: Icons.rotate_right_rounded,
+                color: (_rotationAngle != 0) ? Colors.orangeAccent : Colors.white70,
+                onPressed: () =>  setState(() => _showrotateMenu = !_showrotateMenu),
+              ),
+
+              const SizedBox(height: 11),
+              // دکمه فیت کردن (Fit)
+              _buildActionButton(
+                icon: Icons.fit_screen_rounded,
+                color: Colors.greenAccent,
+                onPressed: _fitToScreen,
               ),
             ],
           ),
-        ],
+        ], // پایان Row اصلی
+      ),
+      
+      // ۴. منوی زوم (لایه شناور که با زدن دکمه بالا ظاهر می‌شود)
+      if (_showZoomMenu)
+        Positioned(
+          right: 55, // فاصله از لبه سمت راست برای اینکه کنار دکمه قرار بگیرد
+          top: 57,   // تراز دقیق مقابل دکمه زوم
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            decoration: BoxDecoration(
+              color: Colors.black.withOpacity(0.85),
+              borderRadius: BorderRadius.circular(25),
+              border: Border.all(color: Colors.white24),
+              boxShadow: const [
+                BoxShadow(color: Colors.black54, blurRadius: 10, offset: Offset(0, 4))
+              ],
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // دکمه کم کردن زوم (-)
+                _buildZoomStepButton(Icons.remove, () => _changeZoomStep(false)),
+                
+                // دکمه وسط برای نمایش درصد و ریست کردن (۱۰۰٪)
+                GestureDetector(
+                  onTap: _resetZoom,
+                  child: Container(
+                    constraints: const BoxConstraints(minWidth: 50),
+                    padding: const EdgeInsets.symmetric(vertical: 6),
+                    alignment: Alignment.center,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          "${(_transformationController.value.getMaxScaleOnAxis() * 100).toInt()}%",
+                          style: const TextStyle(
+                            color: Colors.white, 
+                            fontSize: 10, 
+                            fontWeight: FontWeight.bold
+                          ),
+                        ),
+                        const Text(
+                          "RESET", 
+                          style: TextStyle(
+                            color: Colors.blueAccent, 
+                            fontSize: 7, 
+                            fontWeight: FontWeight.bold
+                          )
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                
+                // دکمه زیاد کردن زوم (+)
+                _buildZoomStepButton(Icons.add, () => _changeZoomStep(true)),
+              ],
+            ),
+          ),
+        ),
+
+      // ۵. منوی چرخش (جدید)
+      if (_showrotateMenu)
+        _buildFloatingMenu(
+          top: 114, // پایین‌تر از منوی زوم قرار می‌گیرد
+          onDecrease: () => _changeRotation(false),
+          onIncrease: () => _changeRotation(true),
+          onReset: _resetRotation,
+          // نمایش زاویه به درجه برای کاربر
+          label: "${(_rotationAngle * 180 / 3.14159).round()}°",
+          resetText: "ZERO",
+          accentColor: Colors.orangeAccent,
+        ),
+      ],
+    ),
+  );
+}
+
+
+
+  Widget _buildZoomStepButton(IconData icon, VoidCallback onTap) {
+    return Material( // اضافه کردن متریال برای هندل کردن بهتر لمس
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(20),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+          child: Icon(icon, color: Colors.white, size: 20), // سایز کمی بزرگتر برای لمس راحت‌تر
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFloatingMenu({
+    required double top,
+    required VoidCallback onDecrease,
+    required VoidCallback onIncrease,
+    required VoidCallback onReset,
+    required String label,
+    String resetText = "RESET",
+    Color accentColor = Colors.blueAccent,
+  }) {
+    return Positioned(
+      right: 55,
+      top: top,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 4),
+        decoration: BoxDecoration(
+          color: Colors.black.withOpacity(0.85),
+          borderRadius: BorderRadius.circular(25),
+          border: Border.all(color: Colors.white24),
+          boxShadow: const [BoxShadow(color: Colors.black54, blurRadius: 10)],
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _buildZoomStepButton(Icons.remove, onDecrease),
+            GestureDetector(
+              onTap: onReset,
+              child: Container(
+                constraints: const BoxConstraints(minWidth: 50),
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(label, style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                    Text(resetText, style: TextStyle(color: accentColor, fontSize: 7, fontWeight: FontWeight.bold)),
+                  ],
+                ),
+              ),
+            ),
+            _buildZoomStepButton(Icons.add, onIncrease),
+          ],
+        ),
       ),
     );
   }
@@ -630,7 +841,7 @@ class _PhotoEditorPageState extends State<PhotoEditorPage> {
 
                     // ۲. فراخوانی تابع برش که در AspectRatioHandler نوشتیم
                     final croppedFile = await AspectRatioHandler.cropImage(
-                      imageFile: _currentFile!, // استفاده از فایل فعلی
+                      imageFile: _currentFile, // استفاده از فایل فعلی
                           previewSize: const Size(300, 450), 
                           cropSize: _cropAreaSize,
                           cropOffset: _cropOffset,
@@ -641,7 +852,7 @@ class _PhotoEditorPageState extends State<PhotoEditorPage> {
                           _activeTool = ""; 
                           _cropOffset = Offset.zero; // ریست کردن مکان کادر برای استفاده بعدی
                         });
-                                          _addToHistory("-brush");
+                        _addToHistory("-brush");
                   } else {
                     // برای بقیه ابزارها که هنوز نساختیم
                     setState(() => _activeTool = "");

@@ -9,11 +9,11 @@ class ApiService {
   //                  تنظیمات پایه
   // ────────────────────────────────────────────────
 
-  static const String baseUrl = 'http://192.168.0.147:8000/api/v1/';
+  static const String baseUrl = 'http://192.168.2.108:8000/api/v1/';
   
   // دامنه پایه برای فایل‌های رسانه (عکس/ویدیو)
   // فقط همین یک جا رو تغییر بده وقتی سرور عوض شد
-  static const String _mediaBaseUrl = 'http://192.168.0.147:8000';
+  static const String _mediaBaseUrl = 'http://192.168.2.108:8000';
 
   late final Dio _dio;
 
