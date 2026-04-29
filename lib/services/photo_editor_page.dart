@@ -1,9 +1,11 @@
 import 'dart:io';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
-import 'dart:math';
+import 'dart:math' as math; // برای دسترسی به pi
+import 'dart:async'; // این را اضافه کن
 
 import '../logic/editor/aspect_ratio_handler.dart';
+import '../logic/view_manager.dart';
 
 class PhotoEditorPage extends StatefulWidget {
   final File file;
@@ -17,54 +19,57 @@ class _PhotoEditorPageState extends State<PhotoEditorPage> {
   bool _showHelp = false; // وضعیت نمایش دیالوگ راهنما از بالا
   bool _isHelpModeActive = false; // آیا حالت علامت سوال فعال است؟
   double _rotationAngle = 0.0; // مقدار چرخش به رادیان
+  double _currentRotationDisplay = 0.0; // نگهدارنده زاویه برای نمایش در UI
   String _helpText = ""; // متن راهنما
   String _activeTool = ""; // ابزار انتخاب شده فعلی
 
+  late ViewManager _viewManager;
+  final TransformationController _transformationController = TransformationController();
   // در بخش تعریف متغیرها (State)
   List<EditStep> _historySteps = [
     EditStep("اصلی", {'rotation': 0.0, 'brightness': 1.0, 'tool': ""})
   ];
+
   int _lastSavedStepIndex = 0; // در ابتدا مرحله "اصلی" ذخیره شده محسوب می‌شود
   bool _isSaving = false; // برای مدیریت نمایش لودینگ روی دکمه ذخیره
   int _currentStepIndex = 0;
   double _brightnessValue = 1.0; // ۱.۰ یعنی نور طبیعی؛ کمتر تاریک و بیشتر روشن می‌کند
+
 
   double? _selectedRatio; // ذخیره نسبت انتخاب شده
   Size _cropAreaSize = const Size(200, 200); // اندازه پیش‌فرض کادر
   Offset _cropOffset = Offset.zero; // موقعیت کادر نسبت به مرکز
   late File _currentFile; // متغیری که عکس فعلی (بریده شده یا اصلی) را نگه می‌دارد
 
-  final TransformationController _transformationController = TransformationController();
-
   bool _showZoomMenu = false; // برای باز و بسته شدن لیست درصدها
 
+  bool _showPanMenu = false; // برای باز و بسته شدن منوی جابجا کردن عکس
+
   // ۱۵ درجه به رادیان (15 * pi / 180)
-  final double _rotateStep = 0.2618;
   bool _showrotateMenu = false; // برای باز و بسته شدن لیست درصدها
 
-  void _changeRotation(bool clockwise) {
-    setState(() {
-      if (clockwise) {
-        _rotationAngle += _rotateStep;
-      } else {
-        _rotationAngle -= _rotateStep;
-      }
-    });
-  }
 
-  void _resetRotation() {
-    setState(() {
-      _rotationAngle = 0.0;
-    });
-  }
+  final GlobalKey viewportKey = GlobalKey();
 
+  /// مقداردهی اولیه وضعیت برنامه (State)
+  /// در این مرحله:
+  /// ۱. فایل ورودی از [widget.file] گرفته شده و به عنوان عکس جاری تعریف می‌شود.
+  /// ۲. ابعاد واقعی عکس (عرض و ارتفاع) جهت محاسبات دقیق کادر برش استخراج می‌شود.
+  /// ۳. اولین گام در لیست تاریخچه ([_historySteps]) با مقادیر پیش‌فرض (بدون چرخش و تغییر نور)
+  ///    ثبت می‌شود تا کاربر بتواند در صورت نیاز به حالت کاملاً اصلی بازگردد.
   @override
   void initState() {
     super.initState();
+    _transformationController.addListener(_handleMatrixUpdate);
+    // مقداردهی اولیه ViewManager
+    _viewManager = ViewManager(
+      controller: _transformationController,
+      onUpdate: () => setState(() {}),
+    );
     _currentFile = widget.file; // در ابتدا، فایل فعلی همان فایل ورودی است
   
-    // اضافه کردن این خط برای استخراج ابعاد واقعی عکس
-    _getImageDimensions(FileImage(_currentFile));
+    // گرفتن ابعاد عکس به محض شروع
+    _viewManager.getImageDimensions(FileImage(widget.file));
 
     // اولین مرحله تاریخچه با فایل اصلی
     _historySteps = [
@@ -75,17 +80,46 @@ class _PhotoEditorPageState extends State<PhotoEditorPage> {
         'file': widget.file
       })
     ];
-  
   }
 
+void _handleMatrixUpdate() {
+  // فقط همگام‌سازی عدد برای نمایش در منوها
+  _viewManager.syncRotationAngle();
+  
+  setState(() {
+    // تبدیل رادیان به درجه برای نمایش در متن منو
+    double degrees = _viewManager.rotationAngle * 180 / math.pi;
+    _currentRotationDisplay = (degrees % 360 + 360) % 360;
+  });
+}
+
+  @override
+  void dispose() {
+    _viewManager.dispose(); // حتما تایمرها را آزاد کنیم
+    _transformationController.removeListener(_handleMatrixUpdate);
+    _transformationController.dispose();
+    super.dispose();
+  }
+
+  /// متد اصلی ساخت رابط کاربری ویرایشگر تصویر
+  /// ساختار این صفحه به صورت لایه‌بندی (Stack) طراحی شده است:
+  /// ۱. لایه زیرین: شامل یک [AnimatedContainer] که بدنه اصلی (عکس و نوار ابزار عمودی) را در بر می‌گیرد.
+  ///    - عکس داخل یک [InteractiveViewer] قرار دارد تا قابلیت زوم و جابه‌جایی داشته باشد.
+  ///    - از [Transform.rotate] برای اعمال چرخش مستقل از زوم استفاده شده است.
+  ///    - از [ColorFiltered] برای اعمال فیلترهای نوری (مانند Brightness) استفاده می‌شود.
+  /// ۲. کادر برش (Crop Box): یک لایه تعاملی که فقط هنگام انتخاب ابزار "ابعاد و حجم" ظاهر می‌شود
+  ///    و با استفاده از [GestureDetector] قابلیت جابه‌جایی روی عکس را دارد.
+  /// ۳. لایه‌های کنترلی (Overlay):
+  ///    - [_buildTopHelpBanner]: بنر راهنمای بالای صفحه.
+  ///    - [_buildDynamicTopPanel]: پنل هوشمند دکمه‌های Undo/Redo و تنظیمات زوم.
+  ///    - [_buildBottomActionBox]: باکس تنظیمات پایین صفحه که با انتخاب هر ابزار تغییر می‌کند.
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
       body: SafeArea(
         child: Stack( // ۱. پشته اصلی برای مدیریت لایه‌های روی هم
-          children: [
-            
+          children: [ 
             // لایه ۱: بدنه اصلی (عکس و پنل ابزار عمودی)
             AnimatedContainer(
               duration: const Duration(milliseconds: 400),
@@ -94,50 +128,63 @@ class _PhotoEditorPageState extends State<PhotoEditorPage> {
               child: Row(
                 children: [
                   _buildSideToolbar(), // پنل ابزار عمودی سمت چپ
-                  
                   Expanded(
                     child: Center(
                       child: Padding(
                         padding: const EdgeInsets.all(16.0),
-                        child: Stack( // پشته داخلی برای عکس و کادر برش
-                          alignment: Alignment.center,
-                          children: [
-                            InteractiveViewer(
-                              transformationController: _transformationController, // اتصال کنترلر
-                              panEnabled: true, // اجازه جابه‌جایی عکس با انگشت                              
-                              scaleEnabled: true,
-                              // این گزینه اجازه می‌دهد با دو انگشت عکس را بچرخانیم
-                              onInteractionUpdate: (ScaleUpdateDetails details) {
-                                // اگر کاربر در حال چرخاندن دو انگشت است (Rotation != 0)
-                                if (details.rotation != 0) {
-                                  setState(() {
-                                    // تغییر زاویه بر اساس حرکت انگشتان
-                                    double sensitivity = 0.005;
-                                    _rotationAngle += details.rotation* sensitivity;
-                                  });
-                                }
-                              },
-
-                              boundaryMargin: const EdgeInsets.all(100), // حاشیه برای بیرون نرفتن کامل عکس
-                              minScale: 0.5, // حداقل مقدار کوچک‌نمایی
-                              maxScale: 4.0, // حداکثر مقدار بزرگ‌نمایی
-                              // لایه زیرین پشته داخلی: عکس
-                              child: ColorFiltered(
-                                colorFilter: ColorFilter.matrix([
-                                  _brightnessValue, 0, 0, 0, 0,
-                                  0, _brightnessValue, 0, 0, 0,
-                                  0, 0, _brightnessValue, 0, 0,
-                                  0, 0, 0, 1, 0,
-                                ]),
-                                child: Transform.rotate(
-                                  angle: _rotationAngle,
-                                  child: Image.file(_currentFile),
-                                ),
+                        child: Container( // این کانتینر را اضافه یا اصلاح کن
+                          key: viewportKey, // خط‌کش اینجا نصب شد
+                          color: Colors.black, // محوطه سیاه
+                          constraints: BoxConstraints.expand(),
+                          child: Stack( // پشته داخلی برای عکس و کادر برش
+                            alignment: Alignment.center,
+                            children: [
+                              // ۱. در بخش InteractiveViewer، رویداد را فقط برای گرفتن عدد بخواهید
+                              InteractiveViewer(
+                                transformationController: _transformationController,
+                                boundaryMargin: const EdgeInsets.all(double.infinity),
+                                minScale: 0.01,
+                                maxScale: 5.0,
+                                clipBehavior: Clip.none, // اجازه بده محتوا خارج از کادر هم وجود داشته باشد
+                                onInteractionUpdate: (details) {
+                                  // اگر کاربر در حال چرخاندن با دو انگشت است (rotation != 0)
+                                  if (details.rotation != 0) {
+                                    // مستقیماً مقدار تغییر زاویه را به ویو منیجر می‌فرستیم
+                                    _viewManager.applyManualRotation(details.rotation);
+                                  }
+                                },
+                                child: Stack( // یک استک جدید دور عکس می‌کشیم
+                                children: [
+                                  OverflowBox(
+                                    alignment: Alignment.center,
+                                    minWidth: 0.0, maxWidth: double.infinity,
+                                    minHeight: 0.0, maxHeight: double.infinity,
+                                    // ۲. حالا چرخش را اینجا اعمال می‌کنیم که مستقل از زومِ کنترلر باشد
+                                    // child: Transform.rotate(
+                                    //   angle: _rotationAngle,
+                                      child: ColorFiltered(
+                                        colorFilter: ColorFilter.matrix([
+                                          _brightnessValue, 0, 0, 0, 0,
+                                          0, _brightnessValue, 0, 0, 0,
+                                          0, 0, _brightnessValue, 0, 0,
+                                          0, 0, 0, 1, 0,
+                                        ]),
+                                        child: Image.file(
+                                          _currentFile,
+                                          fit: BoxFit.none,
+                                        ),
+                                      ),
+                                    // ),
+                                  ),
+                                  // --- دایره قرمز را اینجا بگذار ---
+                                  // حالا این دایره جزئی از "محتوا" است و با دست جابجا می‌شود
+                                  _buildPhotoCenterPoint(),
+                                ],
                               ),
-                            ),
+                              ),
 
-                            // لایه رویی پشته داخلی: کادر برش (فقط در حالت ابعاد)
-                            if (_activeTool == "ابعاد و حجم")
+                              // لایه رویی پشته داخلی: کادر برش (فقط در حالت ابعاد)
+                              if (_activeTool == "ابعاد و حجم")
                               GestureDetector(
                                 // ۱. گوش دادن به حرکت انگشت روی کادر
                                 onPanUpdate: (details) {
@@ -182,9 +229,10 @@ class _PhotoEditorPageState extends State<PhotoEditorPage> {
                                   ),
                                 ),
                               ),
+                              _buildStaticDebugPoint(),
                             ]
-                        
-                        )
+                          )
+                        ),
                       ),
                     ),
                   ),
@@ -206,355 +254,338 @@ class _PhotoEditorPageState extends State<PhotoEditorPage> {
     );
   }
 
-  void _changeZoomStep(bool increase) {
-    final Matrix4 currentMatrix = _transformationController.value;
-    double currentScale = currentMatrix.getMaxScaleOnAxis();
-    double newScale = increase ? currentScale + 0.25 : currentScale - 0.25;
-    newScale = newScale.clamp(0.5, 4.0);
-    
-    double factor = newScale / currentScale;
 
-    setState(() {
-      // استفاده از Matrix4.copy برای اطمینان از تعریف متد
-      _transformationController.value = Matrix4.copy(currentMatrix)..scale(factor);
-    });
-  }
-
-  void _resetZoom() {
-    setState(() {
-      // بازگرداندن ماتریس به حالت پیش‌فرض (بدون زوم و جابه‌جایی)
-      _transformationController.value = Matrix4.identity();
-    });
-  }
 
   double _rawImageWidth = 0;
   double _rawImageHeight = 0;
 
-  // موقعی که عکس لود میشه (ImageStream)
-  void _getImageDimensions(ImageProvider provider) {
-    provider.resolve(const ImageConfiguration()).addListener(
-      ImageStreamListener((ImageInfo info, bool _) {
-        setState(() {
-          _rawImageWidth = info.image.width.toDouble();
-          _rawImageHeight = info.image.height.toDouble();
-        });
-      }),
-    );
-  }
-
- void _fitToScreen() {
-  // ۱. پیدا کردن ابعاد منطقه‌ای که عکس در آن نمایش داده می‌شود
-  // ما از context استفاده می‌کنیم تا ابعاد دقیق Expanded رو بگیریم
-  final RenderBox? box = context.findRenderObject() as RenderBox?;
-  if (box == null || _rawImageWidth == 0) return;
-
-  // ابعاد کل صفحه
-  final size = box.size;
   
-  // کسر فضای پنل سمت چپ و حاشیه‌ها برای رسیدن به فضای خالص نمایش
-  final double availableWidth = size.width - 60; 
-  final double availableHeight = size.height - 180; 
-
-  // ۲. محاسبه ابعاد اشغال شده توسط عکس در زاویه فعلی (Bounding Box)
-  final double angle = _rotationAngle;
-  final double cosA = cos(angle).abs();
-  final double sinA = sin(angle).abs();
-  
-  // ابعاد عکس چرخیده
-  final double rotatedW = (_rawImageWidth * cosA) + (_rawImageHeight * sinA);
-  final double rotatedH = (_rawImageWidth * sinA) + (_rawImageHeight * cosA);
-
-  // ۳. محاسبه اسکیل دقیق برای "گوش‌ تا گوش"
-  double scaleX = availableWidth / rotatedW;
-  double scaleY = availableHeight / rotatedH;
-  
-  // انتخاب عدد کوچکتر برای اینکه عکس از صفحه بیرون نزند
-  double finalScale = min(scaleX, scaleY);
-
-  // ۴. اعمال به TransformationController بدون تغییر زاویه
-  setState(() {
-    // محاسبه مرکز منطقه نمایش
-    final double centerX = (size.width - 50) / 2 + 50;
-    final double centerY = size.height / 2;
-
-    _transformationController.value = Matrix4.identity()
-      ..translate(centerX, centerY)
-      ..scale(finalScale)
-      // توجه: چون چرخاندن را در Transform.rotate انجام می‌دهی، 
-      // اینجا در ماتریس نباید rotateZ اضافه کنی، وگرنه دوبار می‌چرخد.
-      ..translate(-_rawImageWidth / 2, -_rawImageHeight / 2);
-  });
-}
-
+  /// ساخت پنل داینامیک بالای صفحه (شامل ابزارهای مدیریت و تاریخچه)
+  /// 
+  /// این ویجت یک لایه شناور است که با استفاده از [AnimatedPositioned] جابه‌جا می‌شود:
+  /// ۱. بخش تاریخچه (Undo/Redo): یک [ListView] افقی که تمام گام‌های ویرایش را نشان می‌دهد
+  ///    و به کاربر اجازه می‌دهد به هر مرحله‌ای از ویرایش (Saved یا غیره) بپرد.
+  /// ۲. مدیریت لایه‌ها: دکمه‌های Save، Help، Zoom و Rotate را در یک ستون کناری سازماندهی می‌کند.
+  /// ۳. منوهای شناور (Floating Menus): 
+  ///    - منوی زوم: نمایش درصد فعلی بزرگ‌نمایی و دکمه‌های کنترل پله‌ای.
+  ///    - منوی چرخش: نمایش زاویه به درجه و دکمه‌های چرخش دقیق.
+  /// ۴. پویایی: موقعیت این پنل با باز شدن بنر راهنما (تغییر مقدار [top]) به صورت انیمیشنی جابه‌جا می‌شود.
   Widget _buildDynamicTopPanel() {
-  return AnimatedPositioned(
-    duration: const Duration(milliseconds: 400),
-    curve: Curves.easeInOut,
-    top: _showHelp ? 110 : 20,
-    left: 80,
-    right: 15,
-    // تغییر ۱: ارتفاع ثابت می‌دهیم تا با باز شدن منو، کل پنل جابه‌جا نشود
-    height: 220, 
-    child: Stack( // تغییر ۲: استفاده از استک داخلی برای مدیریت لایه زوم
-      children: [
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // ۱. دکمه ذخیره
-            _buildActionButton(
-              icon: Icons.save_rounded,
-              color: Colors.greenAccent,
-              onPressed: _saveFinalImage,
-            ),
-
-            const SizedBox(width: 10),
-
-            // ۲. بخش Undo/Redo
-            Expanded(
-              child: Container(
-                height: 45,
-                padding: const EdgeInsets.symmetric(horizontal: 8),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(25),
-                  border: Border.all(color: Colors.white10),
-                ),
-                child: Row(
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.undo, color: Colors.white, size: 20),
-                      onPressed: _currentStepIndex > 0 ? () => _goToStep(_currentStepIndex - 1) : null,
-                    ),
-                    Expanded(
-                      child: ListView.builder(
-                        scrollDirection: Axis.horizontal,
-                        itemCount: _historySteps.length,
-                        itemBuilder: (context, index) {
-                          bool isActive = index == _currentStepIndex;
-                          bool isSaved = index <= _lastSavedStepIndex;
-                          return GestureDetector(
-                            onTap: () => _goToStep(index),
-                            child: AnimatedContainer(
-                              duration: const Duration(milliseconds: 200),
-                              alignment: Alignment.center,
-                              padding: const EdgeInsets.symmetric(horizontal: 12),
-                              margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
-                              decoration: BoxDecoration(
-                                color: isSaved
-                                    ? Colors.greenAccent.withOpacity(isActive ? 0.8 : 0.3)
-                                    : Colors.transparent,
-                                borderRadius: BorderRadius.circular(15),
-                                border: Border.all(
-                                  color: isSaved ? Colors.greenAccent : Colors.white30,
-                                  width: 1,
-                                ),
-                              ),
-                              child: Text(
-                                _historySteps[index].label,
-                                style: TextStyle(
-                                  color: isSaved ? Colors.white : Colors.white60,
-                                  fontSize: 10,
-                                  fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
-                                ),
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.redo, color: Colors.white, size: 20),
-                      onPressed: _currentStepIndex < _historySteps.length - 1 ? () => _goToStep(_currentStepIndex + 1) : null,
-                    ),
-                  ],
-                ),
-              ),
-            ),
-
-            const SizedBox(width: 10),
-
-          // ۳. دکمه‌های سمت راست (Help و Zoom)
-          Column(
-            mainAxisSize: MainAxisSize.min,
+    return AnimatedPositioned(
+      duration: const Duration(milliseconds: 400),
+      curve: Curves.easeInOut,
+      top: _showHelp ? 110 : 20,
+      left: 80,
+      right: 15,
+      // تغییر ۱: ارتفاع ثابت می‌دهیم تا با باز شدن منو، کل پنل جابه‌جا نشود
+      height: 450, 
+      child: Stack( // تغییر ۲: استفاده از استک داخلی برای مدیریت لایه زوم
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // دکمه راهنما
+              // ۱. دکمه ذخیره
               _buildActionButton(
-                icon: _isHelpModeActive ? Icons.help_rounded : Icons.help_outline_rounded,
-                color: _isHelpModeActive ? Colors.yellowAccent : Colors.white70,
-                onPressed: () => setState(() {
-                  _isHelpModeActive = !_isHelpModeActive;
-                  _showHelp = _isHelpModeActive;
-                }),
-              ),
-              
-              const SizedBox(height: 11),
-              
-              // دکمه اصلی باز و بسته کردن منوی زوم
-              _buildActionButton(
-                icon: Icons.center_focus_strong,
-                color: _showZoomMenu ? Colors.blueAccent : Colors.white70,
-                onPressed: () => setState(() => _showZoomMenu = !_showZoomMenu),
-              ),
-
-              const SizedBox(height: 11),
-              // دکمه چرخش (جدید)
-              _buildActionButton(
-                icon: Icons.rotate_right_rounded,
-                color: (_rotationAngle != 0) ? Colors.orangeAccent : Colors.white70,
-                onPressed: () =>  setState(() => _showrotateMenu = !_showrotateMenu),
-              ),
-
-              const SizedBox(height: 11),
-              // دکمه فیت کردن (Fit)
-              _buildActionButton(
-                icon: Icons.fit_screen_rounded,
+                icon: Icons.save_rounded,
                 color: Colors.greenAccent,
-                onPressed: _fitToScreen,
+                onPressed: _saveFinalImage,
               ),
-            ],
-          ),
-        ], // پایان Row اصلی
-      ),
-      
-      // ۴. منوی زوم (لایه شناور که با زدن دکمه بالا ظاهر می‌شود)
-      if (_showZoomMenu)
-        Positioned(
-          right: 55, // فاصله از لبه سمت راست برای اینکه کنار دکمه قرار بگیرد
-          top: 57,   // تراز دقیق مقابل دکمه زوم
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 200),
-            padding: const EdgeInsets.symmetric(horizontal: 4),
-            decoration: BoxDecoration(
-              color: Colors.black.withOpacity(0.85),
-              borderRadius: BorderRadius.circular(25),
-              border: Border.all(color: Colors.white24),
-              boxShadow: const [
-                BoxShadow(color: Colors.black54, blurRadius: 10, offset: Offset(0, 4))
-              ],
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // دکمه کم کردن زوم (-)
-                _buildZoomStepButton(Icons.remove, () => _changeZoomStep(false)),
-                
-                // دکمه وسط برای نمایش درصد و ریست کردن (۱۰۰٪)
-                GestureDetector(
-                  onTap: _resetZoom,
-                  child: Container(
-                    constraints: const BoxConstraints(minWidth: 50),
-                    padding: const EdgeInsets.symmetric(vertical: 6),
-                    alignment: Alignment.center,
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          "${(_transformationController.value.getMaxScaleOnAxis() * 100).toInt()}%",
-                          style: const TextStyle(
-                            color: Colors.white, 
-                            fontSize: 10, 
-                            fontWeight: FontWeight.bold
-                          ),
+
+              const SizedBox(width: 5),
+
+              // ۲. بخش Undo/Redo
+              Expanded(
+                child: Container(
+                  height: 45,
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(25),
+                    border: Border.all(color: Colors.white10),
+                  ),
+                  child: Row(
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.undo, color: Colors.white, size: 20),
+                        onPressed: _currentStepIndex > 0 ? () => _goToStep(_currentStepIndex - 1) : null,
+                      ),
+                      Expanded(
+                        child: ListView.builder(
+                          scrollDirection: Axis.horizontal,
+                          itemCount: _historySteps.length,
+                          itemBuilder: (context, index) {
+                            bool isActive = index == _currentStepIndex;
+                            bool isSaved = index <= _lastSavedStepIndex;
+                            return GestureDetector(
+                              onTap: () => _goToStep(index),
+                              child: AnimatedContainer(
+                                duration: const Duration(milliseconds: 200),
+                                alignment: Alignment.center,
+                                padding: const EdgeInsets.symmetric(horizontal: 8),
+                                margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: isSaved
+                                      ? Colors.greenAccent.withOpacity(isActive ? 0.8 : 0.3)
+                                      : Colors.transparent,
+                                  borderRadius: BorderRadius.circular(15),
+                                  border: Border.all(
+                                    color: isSaved ? Colors.greenAccent : Colors.white30,
+                                    width: 1,
+                                  ),
+                                ),
+                                child: Text(
+                                  _historySteps[index].label,
+                                  style: TextStyle(
+                                    color: isSaved ? Colors.white : Colors.white60,
+                                    fontSize: 10,
+                                    fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
+                                  ),
+                                ),
+                              ),
+                            );
+                          },
                         ),
-                        const Text(
-                          "RESET", 
-                          style: TextStyle(
-                            color: Colors.blueAccent, 
-                            fontSize: 7, 
-                            fontWeight: FontWeight.bold
-                          )
-                        ),
-                      ],
-                    ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.redo, color: Colors.white, size: 20),
+                        onPressed: _currentStepIndex < _historySteps.length - 1 ? () => _goToStep(_currentStepIndex + 1) : null,
+                      ),
+                    ],
                   ),
                 ),
-                
-                // دکمه زیاد کردن زوم (+)
-                _buildZoomStepButton(Icons.add, () => _changeZoomStep(true)),
-              ],
-            ),
-          ),
-        ),
+              ),
 
-      // ۵. منوی چرخش (جدید)
-      if (_showrotateMenu)
-        _buildFloatingMenu(
-          top: 114, // پایین‌تر از منوی زوم قرار می‌گیرد
-          onDecrease: () => _changeRotation(false),
-          onIncrease: () => _changeRotation(true),
-          onReset: _resetRotation,
-          // نمایش زاویه به درجه برای کاربر
-          label: "${(_rotationAngle * 180 / 3.14159).round()}°",
-          resetText: "ZERO",
-          accentColor: Colors.orangeAccent,
+              const SizedBox(width: 0),
+
+              			  // ۳. دکمه‌های سمت راست (Help و Zoom)
+              Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // دکمه راهنما
+                  _buildActionButton(
+                    icon: _isHelpModeActive ? Icons.help_rounded : Icons.help_outline_rounded,
+                    color: _isHelpModeActive ? Colors.yellowAccent : Colors.white70,
+                    onPressed: () => setState(() {
+                      _isHelpModeActive = !_isHelpModeActive;
+                      _showHelp = _isHelpModeActive;
+                    }),
+                  ),
+                  
+                  const SizedBox(height: 10),
+
+                  // ۱. دکمه اصلی منوی زوم
+                  _buildActionButton(
+                    icon: Icons.center_focus_strong,
+                    color: _showZoomMenu ? Colors.blueAccent : Colors.white70,
+                    onPressed: () => setState(() {
+                      _showZoomMenu = !_showZoomMenu;
+                      _showrotateMenu = false; // بستن منوی دیگر برای جلوگیری از شلوغی
+                    }),
+                  ),
+
+                  const SizedBox(height: 11),
+
+                  // ۲. دکمه اصلی منوی چرخش
+                  _buildActionButton(
+                    icon: Icons.rotate_right_rounded,
+                    color: _showrotateMenu ? Colors.orangeAccent : Colors.white70,
+                    onPressed: () => setState(() {
+                      _showrotateMenu = !_showrotateMenu;
+                      _showZoomMenu = false; // بستن منوی دیگر
+                    }),
+                  ),
+
+                  const SizedBox(height: 11),
+
+                  // ۳. دکمه فیت کردن (Fit)
+                  _buildActionButton(
+                    icon: Icons.fit_screen_rounded,
+                    color: Colors.greenAccent,
+                    onPressed: () {
+                      // مرحله ۱: زوم را اصلاح کن (عکس ممکن است به گوشه برود)
+                      _viewManager.fitToScreen(viewportKey);
+                      
+                      // مرحله ۲: عکس را از گوشه به مرکز کادر سیاه بیاور
+                      _viewManager.resetToCenter(viewportKey);
+                      
+                      setState(() {});
+                    }
+                  ),
+
+// داخل آن ستون (Column) دکمه‌های سمت راست
+const SizedBox(height: 11),
+_buildActionButton(
+  icon: Icons.open_with,
+  // اگر ابزار فعال "pan" بود، رنگ دکمه بنفش شود
+  color: _activeTool == "pan" ? Colors.purpleAccent : Colors.white70, 
+  onPressed: () {
+    setState(() {
+        _showPanMenu = !_showPanMenu;
+      
+    });
+  },
+),
+                ],
+              ),
+            ], // پایان Row اصلی
+          ),
+
+
+            // ۴. استفاده از متد آماده برای منوی زوم
+            if (_showZoomMenu)
+            _viewManager.buildFloatingMenu(
+              top: 57,
+              label: "${(_transformationController.value.getMaxScaleOnAxis() * 100).toInt()}%",
+              onDecrease: () => _viewManager.changeZoomStep(false),
+              onIncrease: () => _viewManager.changeZoomStep(true),
+              onReset: () => _viewManager.resetZoom(),
+              accentColor: Colors.blueAccent,
+            ),
+
+            // ۵. استفاده از متد آماده برای منوی چرخش
+            if (_showrotateMenu)
+            _viewManager.buildFloatingMenu(
+              top: 114,
+              label: "${(_viewManager.rotationAngle * 180 / math.pi).abs().toStringAsFixed(0)}°",
+              resetText: "ZERO",
+              onDecrease: () => _viewManager.changeRotation(false),
+              onIncrease: () => _viewManager.changeRotation(true),
+              onReset: () => _viewManager.resetRotation(),
+              accentColor: Colors.orangeAccent,
+            ),
+
+            if (_showPanMenu)
+            _viewManager.buildFloatingPanMenu(
+                top: 230, // مقدار متناسب با دکمه پن
+                onStartPan: (dx, dy) => _viewManager.startContinuousPan(dx, dy),
+                onStop: () => _viewManager.stopContinuousPan(),
+                onCenterTap: () {
+                  _viewManager.resetToCenter(viewportKey);
+                  setState(() {}); // برای بروزرسانی نقاط دیباگ اگر روشن هستند
+                },
+              ),
+          ]
         ),
-      ],
+      );
+  }
+
+  Widget _buildArrowCircle(IconData icon, VoidCallback onPressed) {
+  return InkWell(
+    onTap: onPressed,
+    borderRadius: BorderRadius.circular(30),
+    child: Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: Colors.white.withOpacity(0.1),
+        border: Border.all(color: Colors.white.withOpacity(0.2)),
+      ),
+      child: Icon(icon, color: Colors.white, size: 32),
     ),
   );
 }
 
+  // --- این بخش را دقیقاً قبل از پایانِ Stack (داخل لیست children) اضافه کن ---
+  
+ 
 
-
-  Widget _buildZoomStepButton(IconData icon, VoidCallback onTap) {
-    return Material( // اضافه کردن متریال برای هندل کردن بهتر لمس
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(20),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-          child: Icon(icon, color: Colors.white, size: 20), // سایز کمی بزرگتر برای لمس راحت‌تر
-        ),
+Widget _buildToolButton({
+  required IconData icon,
+  required String label,
+  required bool isActive,
+  required VoidCallback onTap,
+}) {
+  return GestureDetector(
+    onTap: onTap,
+    child: Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
+        // اگر ابزار فعال باشد، پس‌زمینه کمی روشن‌تر می‌شود
+        color: isActive ? Colors.white.withOpacity(0.1) : Colors.transparent,
+        borderRadius: BorderRadius.circular(8),
       ),
-    );
-  }
-
-  Widget _buildFloatingMenu({
-    required double top,
-    required VoidCallback onDecrease,
-    required VoidCallback onIncrease,
-    required VoidCallback onReset,
-    required String label,
-    String resetText = "RESET",
-    Color accentColor = Colors.blueAccent,
-  }) {
-    return Positioned(
-      right: 55,
-      top: top,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(horizontal: 4),
-        decoration: BoxDecoration(
-          color: Colors.black.withOpacity(0.85),
-          borderRadius: BorderRadius.circular(25),
-          border: Border.all(color: Colors.white24),
-          boxShadow: const [BoxShadow(color: Colors.black54, blurRadius: 10)],
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _buildZoomStepButton(Icons.remove, onDecrease),
-            GestureDetector(
-              onTap: onReset,
-              child: Container(
-                constraints: const BoxConstraints(minWidth: 50),
-                padding: const EdgeInsets.symmetric(vertical: 6),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(label, style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
-                    Text(resetText, style: TextStyle(color: accentColor, fontSize: 7, fontWeight: FontWeight.bold)),
-                  ],
-                ),
-              ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            icon,
+            color: isActive ? Colors.blueAccent : Colors.white,
+            size: 28,
+          ),
+          const SizedBox(height: 4),
+          Text(
+            label,
+            style: TextStyle(
+              color: isActive ? Colors.blueAccent : Colors.white,
+              fontSize: 12,
             ),
-            _buildZoomStepButton(Icons.add, onIncrease),
-          ],
-        ),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+  // ۱. نقطه سبز: مرکز ثابت محوطه نمایش (Target)
+  Widget _buildStaticDebugPoint() {
+    if (_viewManager.debugViewportCenter == null) return const SizedBox.shrink();
+
+    print("-----------------------------------------");
+    print("📍 DEBUG COORDINATES:");
+    print("🟢 Viewport Center (Target): ${_viewManager.debugViewportCenter}");
+
+  // ۱. گرفتن ماتریس فعلی از کنترلر InteractiveViewer
+  final Matrix4 matrix = _transformationController.value;
+
+  // ۲. تبدیل مختصات محلی عکس (نقطه قرمز) به مختصات نمایشی (Scene)
+  // این کار اثر زوم (Scale) و جابجایی (Offset) را روی نقطه قرمز اعمال می‌کند
+  final Offset localPoint = _viewManager.debugActualImageCenter!; 
+  final Offset globalPointOfImage = MatrixUtils.transformPoint(matrix, localPoint);
+
+  // ۳. حالا محاسبه بردار جابجایی واقعی
+  final Offset displacementVector = _viewManager.debugViewportCenter! - globalPointOfImage;
+
+  print("-----------------------------------------");
+  print("📍 ACTUAL COORDINATES (Post-Transform):");
+  print("🟢 Viewport Center: ${_viewManager.debugViewportCenter}");
+  print("🔴 Image Center in Viewport Space: $globalPointOfImage"); // این عدد دیگر ۱۵۱ نخواهد بود
+  print("📐 REAL DISPLACEMENT VECTOR:");
+  print("   Vector DX: ${displacementVector.dx}");
+  print("   Vector DY: ${displacementVector.dy}");
+  print("   Required Move: ${displacementVector.distance.toStringAsFixed(2)} pixels");
+
+    return Positioned(
+      left: _viewManager.debugViewportCenter!.dx - 5,
+      top: _viewManager.debugViewportCenter!.dy - 5,
+      child: Container(
+        width: 10, height: 10,
+        decoration: const BoxDecoration(color: Colors.green, shape: BoxShape.circle),
       ),
     );
   }
 
+  // ۲. نقطه قرمز: مرکز واقعی عکس که باید با عکس جابجا شود
+  Widget _buildPhotoCenterPoint() {
+    if (_viewManager.debugActualImageCenter == null) return const SizedBox.shrink();
+    print("🔴 Image Center (Current): ${_viewManager.debugActualImageCenter}");
+    return Positioned(
+      left: _viewManager.debugActualImageCenter!.dx - 25,
+      top: _viewManager.debugActualImageCenter!.dy - 25,
+      child: Container(
+        width: 25, height: 25,
+        decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
+      ),
+    );
+  }
+
+  /// مدیریت فرآیند نهایی‌سازی و ذخیره تصویر
+  /// 
+  /// این متد وظایف زیر را به عهده دارد:
+  /// ۱. فعال‌سازی حالت بارگذاری ([_isSaving]): نمایش نشانگر پیشرفت به کاربر.
+  /// ۲. همگام‌سازی تاریخچه: مقدار [_lastSavedStepIndex] را با ایندکس فعلی برابر می‌کند. 
+  ///    این کار باعث می‌شود در پنل تاریخچه، تمام گام‌های قبلی به رنگ سبز (ذخیره شده) درآیند.
+  /// ۳. بازخورد به کاربر: نمایش یک [SnackBar] موفقیت‌آمیز پس از اتمام فرآیند.
+  /// ۴. پایداری: استفاده از [mounted] برای جلوگیری از خطای حافظه در صورتی که کاربر قبل از اتمام ذخیره، صفحه را ببندد.
   void _saveFinalImage() async {
     setState(() => _isSaving = true);
     
@@ -574,6 +605,15 @@ class _PhotoEditorPageState extends State<PhotoEditorPage> {
     }
   }
 
+  /// مدیریت سیستم تاریخچه تعاملی (Undo/Redo Logic)
+  /// 
+  /// این متد قلب سیستم مدیریت وضعیت برنامه است که وظایف زیر را انجام می‌دهد:
+  /// ۱. مدیریت انشعاب (Branching): اگر کاربر Undo کرده باشد و تغییر جدیدی ثبت کند، 
+  ///    تمام مراحل "آینده" حذف می‌شوند تا تاریخچه خطی بماند (مشابه استاندارد فتوشاپ).
+  /// ۲. ثبت وضعیت (Snapshot): یک کپی کامل از تمام متغیرهای کنترلی (زاویه، نور، ابزار فعال و فایل فعلی)
+  ///    در لحظه تغییر ایجاد کرده و در قالب یک نقشه ([Map]) ذخیره می‌کند.
+  /// ۳. به‌روزرسانی نشانگر: اشاره‌گر [_currentStepIndex] را به آخرین گام منتقل می‌کند تا 
+  ///    رابط کاربری دقیقاً مرحله جدید را به عنوان مرحله فعال نشان دهد.
   void _addToHistory(String label) {
     setState(() {
       // ۱. اگر کاربر چند مرحله عقب رفته باشد و تغییر جدیدی ایجاد کند، 
@@ -602,7 +642,13 @@ class _PhotoEditorPageState extends State<PhotoEditorPage> {
     });
   }
 
-  // متد کمکی برای ساخت دکمه‌های گرد و هم‌اندازه
+  /// ساخت دکمه‌های کنترلی استاندارد و متحدالشکل
+  /// 
+  /// این متد کمکی (Helper) برای حفظ یکپارچگی طراحی در تمام بخش‌های برنامه استفاده می‌شود:
+  /// ۱. هندسه ثابت: ایجاد دکمه‌های دایره‌ای با ابعاد دقیق ۴۵x۴۵ پیکسل.
+  /// ۲. طراحی بصری: استفاده از پس‌زمینه نیمه‌شفاف ([withOpacity]) و لبه‌های ظریف ([Border]) 
+  ///    برای ایجاد ظاهری مدرن و شیشه‌ای (Glassmorphism).
+  /// ۳. تعامل: پارامتر [onPressed] اجازه می‌دهد تا عملکردهای مختلف به یک قالب بصری واحد تزریق شوند.
   Widget _buildActionButton({required IconData icon, required Color color, required VoidCallback onPressed}) {
     return Container(
       width: 45,
@@ -618,6 +664,16 @@ class _PhotoEditorPageState extends State<PhotoEditorPage> {
       ),
     );
   }
+
+  /// انتقال وضعیت برنامه به یک گام مشخص از تاریخچه (Time Travel)
+  /// 
+  /// این متد با دریافت [index]، وضعیت کامل ویرایشگر را به آن لحظه بازمی‌گرداند:
+  /// ۱. بازیابی متغیرها: تمام مقادیر ذخیره شده شامل زاویه چرخش، میزان نور و ابزار فعال 
+  ///    از نقشه ([targetState]) استخراج و به متغیرهای اصلی اختصاص داده می‌شوند.
+  /// ۲. مدیریت تصویر: فایل تصویر مربوط به آن مرحله (مثلاً عکسی که در مرحله قبل کراپ شده) 
+  ///    مجدداً به عنوان تصویر جاری ([_currentFile]) بارگذاری می‌شود.
+  /// ۳. پویایی راهنما: متن راهنمای بالای صفحه را متناسب با ابزاری که در آن مرحله فعال بوده، به‌روزرسانی می‌کند.
+  /// ۴. ایمنی داده: با استفاده از عملگر [??]، از بروز خطا در صورت نبودن یکی از پارامترها در مراحل قدیمی جلوگیری می‌کند.
   void _goToStep(int index) {
     // بررسی اینکه ایندکس در محدوده لیست باشد
     if (index >= 0 && index < _historySteps.length) {
@@ -647,7 +703,16 @@ class _PhotoEditorPageState extends State<PhotoEditorPage> {
     }
   }
 
-  // پنل ابزارهای کناری
+  /// ساخت نوار ابزار عمودی کناری (Side Navigation Toolbar)
+  /// 
+  /// این ویجت ستون فقرات دسترسی کاربر به قابلیت‌های ویرایش است:
+  /// ۱. دسته‌بندی هوشمند: ابزارها به دو بخش اصلی تقسیم شده‌اند:
+  ///    الف) ابزارهای Frontend: پردازش‌های سریع و داخلی موبایل (رنگ صورتی).
+  ///    ب) ابزارهای AI/Backend: پردازش‌های سنگین هوش مصنوعی در سمت سرور (رنگ زرد).
+  /// ۲. طراحی ریسپانسیو: استفاده از [SingleChildScrollView] باعث می‌شود در گوشی‌هایی با 
+  ///    صفحه نمایش کوچک، کاربر به راحتی با اسکرول کردن به تمام ابزارها دسترسی داشته باشد.
+  /// ۳. تفکیک بصری: استفاده از یک خط عمودی ظریف ([Border]) و جداکننده‌های افقی ([Divider]) 
+  ///    برای ایجاد نظم و تمایز بین بخش‌های مختلف ابزارها.
   Widget _buildSideToolbar() {
     return Container(
       width: 50, // کمی عریض‌تر برای راحتی لمس
@@ -712,7 +777,12 @@ class _PhotoEditorPageState extends State<PhotoEditorPage> {
     );
   }
 
-  // ویجت دکمه ابزار با قابلیت تول‌تیپ و علامت سوال
+  /// ساخت دکمه‌های تکی نوار ابزار با قابلیت‌های تعاملی
+  /// 
+  /// این متد برای هر ابزار یک دکمه اختصاصی می‌سازد که شامل:
+  /// ۱. سیستم بازخورد بصری: با استفاده از [AnimatedContainer]، ابزار فعال با تغییر رنگ پس‌زمینه و آیکون به رنگ آبی متمایز می‌شود.
+  /// ۲. تول‌تیپ (Tooltip): هنگام نگه داشتن انگشت، نام ابزار در کنار نوار ابزار (سمت راست) نمایش داده می‌شود.
+  /// ۳. مدیریت وضعیت: با ضربه زدن روی ابزار، متغیر [_activeTool] و متن راهنمای مربوط به آن ([_helpText]) به‌روزرسانی می‌شود.
   Widget _toolIconButton(IconData icon, String toolName, String helpDesc, {required MaterialAccentColor iconColor}) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 16),
@@ -750,7 +820,12 @@ class _PhotoEditorPageState extends State<PhotoEditorPage> {
     );
   }
 
-  // بنر راهنما که از بالا باز می‌شود
+  /// ساخت دکمه‌های تکی نوار ابزار با قابلیت‌های تعاملی
+  /// 
+  /// این متد برای هر ابزار یک دکمه اختصاصی می‌سازد که شامل:
+  /// ۱. سیستم بازخورد بصری: با استفاده از [AnimatedContainer]، ابزار فعال با تغییر رنگ پس‌زمینه و آیکون به رنگ آبی متمایز می‌شود.
+  /// ۲. تول‌تیپ (Tooltip): هنگام نگه داشتن انگشت، نام ابزار در کنار نوار ابزار (سمت راست) نمایش داده می‌شود.
+  /// ۳. مدیریت وضعیت: با ضربه زدن روی ابزار، متغیر [_activeTool] و متن راهنمای مربوط به آن ([_helpText]) به‌روزرسانی می‌شود.
   Widget _buildTopHelpBanner() {
     return AnimatedPositioned(
       duration: const Duration(milliseconds: 400),
@@ -800,124 +875,202 @@ class _PhotoEditorPageState extends State<PhotoEditorPage> {
     );
   }
 
-  // دیالوگ باکس پایین برای انجام عملیات
- Widget _buildBottomActionBox() {
-  return Positioned(
-    bottom: 10, left: 60, right: 10, // فاصله از چپ برای تداخل نداشتن با پنل ابزار
-    child: Container(
-      padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 12),
-      decoration: BoxDecoration(
-        color: const Color(0xFF1A1A1A).withOpacity(0.9), // کمی تیره‌تر برای خوانایی بهتر
-        borderRadius: BorderRadius.circular(25),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.5), blurRadius: 15)],
-        border: Border.all(color: Colors.white10),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min, // باکس به اندازه محتوا جمع می‌شود
-        children: [
-          // نمایش محتوای اختصاصی هر ابزار
-          if (_activeTool == "ابعاد و حجم") _buildAspectRatioContent(),
-          
-          const SizedBox(height: 10),
-          
-          // ردیف دکمه‌های کنترلی (انصراف و اعمال)
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              TextButton(
-                onPressed: () => setState(() => _activeTool = ""),
-                child: const Text("انصراف", style: TextStyle(color: Colors.white54)),
-              ),
-              Text("تنظیمات $_activeTool", style: const TextStyle(color: Colors.white70, fontSize: 12)),
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.pinkAccent,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-                ),
-                onPressed: () async {
-                  if (_activeTool == "ابعاد و حجم") {
-                    // ۱. نمایش حالت انتظار (اختیاری ولی حرفه‌ای)
-                    // اینجا می‌توانی یک متغیر isLoading را true کنی
-
-                    // ۲. فراخوانی تابع برش که در AspectRatioHandler نوشتیم
-                    final croppedFile = await AspectRatioHandler.cropImage(
-                      imageFile: _currentFile, // استفاده از فایل فعلی
-                          previewSize: const Size(300, 450), 
-                          cropSize: _cropAreaSize,
-                          cropOffset: _cropOffset,
-                        );
-
-                        setState(() {
-                          _currentFile = croppedFile; // جایگزینی عکس بریده شده
-                          _activeTool = ""; 
-                          _cropOffset = Offset.zero; // ریست کردن مکان کادر برای استفاده بعدی
-                        });
-                        _addToHistory("-brush");
-                  } else {
-                    // برای بقیه ابزارها که هنوز نساختیم
-                    setState(() => _activeTool = "");
-                  }
-                },
-                child: const Text("اعمال"),
-              ),
-            ],
-          ),
-        ],
-      ),
-    ),
-  );
-}
-
-Widget _buildAspectRatioContent() {
-  var options = AspectRatioHandler.getOptions();
-  return SizedBox(
-    height: 70,
-    child: ListView.builder(
-      scrollDirection: Axis.horizontal,
-      itemCount: options.length,
-      itemBuilder: (context, index) {
-        var opt = options[index];
-        return GestureDetector(
-          onTap: () {
-            setState(() {
-              _selectedRatio = opt.ratio;
-              _cropOffset = Offset.zero; // بازگشت به مرکز با تغییر نسبت
-              
-              // فرض می‌کنیم سایز نمایش عکس را داریم (مثلاً 300x400)
-              // در دنیای واقعی بهتر است از LayoutBuilder استفاده شود
-              _cropAreaSize = AspectRatioHandler.calculateCropSize(
-                ratio: opt.ratio,
-                imageAreaSize: const Size(300, 450), 
-              );
-            });
-            _addToHistory("ابعاد: ${opt.label}");
-          },
-          child: Container(
-            width: 65,
-            margin: const EdgeInsets.only(right: 10),
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.05),
-              borderRadius: BorderRadius.circular(15),
-              border: Border.all(color: Colors.white10),
-            ),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
+  /// ساخت باکس عملیاتی پایین صفحه (Bottom Action Box)
+  /// 
+  /// این ویجت به عنوان کنسول کنترلی هر ابزار عمل می‌کند:
+  /// ۱. مدیریت محتوای پویا: با توجه به ابزار انتخاب شده (مانند "ابعاد و حجم")، ویجت‌های کنترلی مخصوص آن ابزار را در بخش بالایی نمایش می‌دهد.
+  /// ۲. دکمه‌های تایید و انصراف: 
+  ///    - انصراف: ابزار فعال را غیرفعال کرده و تغییرات موقت را لغو می‌کند.
+  ///    - اعمال: عملیات اصلی ابزار (مانند [AspectRatioHandler.cropImage]) را روی فایل واقعی اجرا می‌کند.
+  /// ۳. پردازش تصویر: پس از کلیک بر روی "اعمال"، تصویر جدید جایگزین تصویر قبلی شده، مختصات کادر ریست می‌شود و یک گام جدید به تاریخچه افزوده می‌گردد.
+  /// ۴. طراحی شناور: با استفاده از [Positioned]، این باکس به گونه‌ای قرار گرفته که با نوار ابزار کناری تداخلی نداشته باشد.عملیات
+  Widget _buildBottomActionBox() {
+    return Positioned(
+      bottom: 10, left: 60, right: 10, // فاصله از چپ برای تداخل نداشتن با پنل ابزار
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 12),
+        decoration: BoxDecoration(
+          color: const Color(0xFF1A1A1A).withOpacity(0.9), // کمی تیره‌تر برای خوانایی بهتر
+          borderRadius: BorderRadius.circular(25),
+          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.5), blurRadius: 15)],
+          border: Border.all(color: Colors.white10),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min, // باکس به اندازه محتوا جمع می‌شود
+          children: [
+            // نمایش محتوای اختصاصی هر ابزار
+            if (_activeTool == "ابعاد و حجم") _buildAspectRatioContent(),
+            
+            const SizedBox(height: 10),
+            
+            // ردیف دکمه‌های کنترلی (انصراف و اعمال)
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Icon(opt.icon, color: Colors.pinkAccent, size: 20),
-                const SizedBox(height: 4),
-                Text(opt.label, style: const TextStyle(color: Colors.white, fontSize: 9)),
+                TextButton(
+                  onPressed: () => setState(() => _activeTool = ""),
+                  child: const Text("انصراف", style: TextStyle(color: Colors.white54)),
+                ),
+                Text("تنظیمات $_activeTool", style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.pinkAccent,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                  ),
+                  onPressed: () async {
+                    if (_activeTool == "ابعاد و حجم") {
+                      // ۱. نمایش حالت انتظار (اختیاری ولی حرفه‌ای)
+                      // اینجا می‌توانی یک متغیر isLoading را true کنی
+
+                      // ۲. فراخوانی تابع برش که در AspectRatioHandler نوشتیم
+                      final croppedFile = await AspectRatioHandler.cropImage(
+                        imageFile: _currentFile, // استفاده از فایل فعلی
+                            previewSize: const Size(300, 450), 
+                            cropSize: _cropAreaSize,
+                            cropOffset: _cropOffset,
+                          );
+
+                          setState(() {
+                            _currentFile = croppedFile; // جایگزینی عکس بریده شده
+                            _activeTool = ""; 
+                            _cropOffset = Offset.zero; // ریست کردن مکان کادر برای استفاده بعدی
+                          });
+                          _addToHistory("-brush");
+                    } else {
+                      // برای بقیه ابزارها که هنوز نساختیم
+                      setState(() => _activeTool = "");
+                    }
+                  },
+                  child: const Text("اعمال"),
+                ),
               ],
             ),
-          ),
-        );
-      },
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// ساخت لیست انتخاب نسبت تصویر (Aspect Ratio Selector)
+  /// 
+  /// این متد محتوای اختصاصی ابزار "ابعاد و حجم" را مدیریت می‌کند:
+  /// ۱. دریافت گزینه‌ها: لیست نسبت‌های استاندارد (مثل ۱:۱ یا استوری) را از [AspectRatioHandler] فراخوانی می‌کند.
+  /// ۲. محاسبه ابعاد کادر برش: با انتخاب هر گزینه، اندازه کادر سفید روی صفحه ([_cropAreaSize]) به صورت آنی محاسبه می‌شود تا پیش‌نمایش دقیقی به کاربر داده شود.
+  /// ۳. تعامل کاربر: هر گزینه شامل یک آیکون و برچسب است که با کلیک روی آن، علاوه بر تغییر نسبت، یک ثبت موقت در تاریخچه انجام می‌شود تا کاربر بداند چه تغییری ایجاد کرده است.
+  /// ۴. طراحی پیمایشی: گزینه‌ها در یک [ListView] افقی قرار گرفته‌اند تا فضای کمی اشغال کنند.
+  Widget _buildAspectRatioContent() {
+    var options = AspectRatioHandler.getOptions();
+    return SizedBox(
+      height: 70,
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        itemCount: options.length,
+        itemBuilder: (context, index) {
+          var opt = options[index];
+          return GestureDetector(
+            onTap: () {
+              setState(() {
+                _selectedRatio = opt.ratio;
+                _cropOffset = Offset.zero; // بازگشت به مرکز با تغییر نسبت
+                
+                // فرض می‌کنیم سایز نمایش عکس را داریم (مثلاً 300x400)
+                // در دنیای واقعی بهتر است از LayoutBuilder استفاده شود
+                _cropAreaSize = AspectRatioHandler.calculateCropSize(
+                  ratio: opt.ratio,
+                  imageAreaSize: const Size(300, 450), 
+                );
+              });
+              _addToHistory("ابعاد: ${opt.label}");
+            },
+            child: Container(
+              width: 65,
+              margin: const EdgeInsets.only(right: 10),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.05),
+                borderRadius: BorderRadius.circular(15),
+                border: Border.all(color: Colors.white10),
+              ),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(opt.icon, color: Colors.pinkAccent, size: 20),
+                  const SizedBox(height: 4),
+                  Text(opt.label, style: const TextStyle(color: Colors.white, fontSize: 9)),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  void applyCorrection() {
+  final Matrix4 currentMatrix = _transformationController.value;
+  
+  // ۱. محاسبه بردار جابجایی (همان کدی که در مرحله قبل نوشتیم)
+  final Offset localPoint = _viewManager.debugActualImageCenter!; 
+  final Offset globalPointOfImage = MatrixUtils.transformPoint(currentMatrix, localPoint);
+  final Offset displacementVector = _viewManager.debugViewportCenter! - globalPointOfImage;
+
+  // ۲. ایجاد یک ماتریس برای جابجایی (Translation)
+  final Matrix4 translationMatrix = Matrix4.identity()
+    ..translate(displacementVector.dx, displacementVector.dy);
+
+  // ۳. ترکیب ماتریس جدید با ماتریس قبلی
+  // نکته: جابجایی باید به "مجموع" ماتریس اضافه شود
+  final Matrix4 newMatrix = translationMatrix * currentMatrix;
+
+  // ۴. اعمال به کنترلر (به صورت انیمیشن یا مستقیم)
+  setState(() {
+    _transformationController.value = newMatrix;
+  });
+}
+
+Widget _buildPanController() {
+  return Container(
+    padding: const EdgeInsets.all(8),
+    decoration: BoxDecoration(
+      color: Colors.black87,
+      borderRadius: BorderRadius.circular(25),
+      border: Border.all(color: Colors.white10),
+    ),
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _buildPanButton(Icons.arrow_upward, 0, -10), // بالا
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _buildPanButton(Icons.arrow_back, -10, 0), // چپ
+            const SizedBox(width: 20),
+            _buildPanButton(Icons.arrow_forward, 10, 0), // راست
+          ],
+        ),
+        _buildPanButton(Icons.arrow_downward, 0, 10), // پایین
+      ],
+    ),
+  );
+}
+
+Widget _buildPanButton(IconData icon, double dx, double dy) {
+  return GestureDetector(
+    onLongPressStart: (_) => _viewManager.startContinuousPan(dx, dy),
+    onLongPressEnd: (_) => _viewManager.stopContinuousPan(),
+    onTap: () => _viewManager.manualPan(dx, dy), // برای جابجایی تکی با یک ضربه
+    child: CircleAvatar(
+      backgroundColor: Colors.white24,
+      child: Icon(icon, color: Colors.white),
     ),
   );
 }
 
 }
 
-// مدلی برای ذخیره هر مرحله از ویرایش
+/// مدل داده‌ای برای ذخیره "کپسول" وضعیت در هر مرحله
+/// 
+/// این کلاس [EditStep] وظیفه دارد یک اسنپ‌شات (Snapshot) کامل از تمام 
+/// تنظیمات برنامه را در یک لحظه خاص ذخیره کند
 class EditStep {
   final String label; // مثلاً "چرخش +۹۰"
   final Map<String, dynamic> state; // ذخیره مقادیر عددی در آن لحظه
@@ -925,5 +1078,12 @@ class EditStep {
   EditStep(this.label, this.state);
 }
 
+/// مدیریت مخزن تاریخچه و موقعیت فعلی کاربر
+/// 
+/// [_historySteps]: لیستی از تمام مراحلی که کاربر طی کرده است. 
+/// اولین آیتم همیشه "اصلی" است تا راه بازگشت به عکس خام باز باشد.
+/// 
+/// [_currentStepIndex]: نشانگر یا "هد" سیستم تاریخچه است که مشخص می‌کند 
+/// کاربر در حال حاضر در کدام مرحله از لیست قرار دارد (برای Undo/Redo).
 List<EditStep> _historySteps = [EditStep("اصلی", {})]; // نقطه شروع
 int _currentStepIndex = 0;
