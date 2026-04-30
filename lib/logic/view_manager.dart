@@ -170,31 +170,37 @@ void changeRotation(bool clockwise) {
   /// 
   /// این متد با محاسبات مثلثاتی، مستطیل دربرگیرنده عکس چرخیده (Bounding Box) را پیدا کرده
   /// و اسکیل عکس را طوری تنظیم می‌کند که در فضای خالی بین پنل‌ها به بهترین شکل جای گیرد.
+
 void fitToScreen(GlobalKey key) {
   if (rawImageWidth == 0 || rawImageHeight == 0) return;
 
   final renderBox = key.currentContext?.findRenderObject() as RenderBox?;
   if (renderBox == null) return;
 
-  // ۱. محاسبه اسکیل هدف (متناسب با فضای صفحه)
-  double scaleX = renderBox.size.width / rawImageWidth;
-  double scaleY = renderBox.size.height / rawImageHeight;
+  // ۱. محاسبه اسکیل بر اساس چرخش (این بخش درست بود)
+  bool isRotatedSide = (rotationAngle / (math.pi / 2)).round() % 2 != 0;
+  double effectiveWidth = isRotatedSide ? rawImageHeight : rawImageWidth;
+  double effectiveHeight = isRotatedSide ? rawImageWidth : rawImageHeight;
+
+  double scaleX = renderBox.size.width / effectiveWidth;
+  double scaleY = renderBox.size.height / effectiveHeight;
   double targetScale = (scaleX < scaleY) ? scaleX : scaleY;
 
-  // ۲. حفظ زاویه چرخش فعلی
-  // ما از متغیر rotationAngle که همیشه همگام است استفاده می‌کنیم
-  final double currentAngle = rotationAngle;
+  // ۲. اعمال زوم و چرخش به کنترلر (بدون تغییر دادن آفست فعلی)
+  final Matrix4 newMatrix = Matrix4.identity();
+  newMatrix.scale(targetScale);
+  
+  final double centerX = rawImageWidth / 2;
+  final double centerY = rawImageHeight / 2;
+  
+  controller.value = newMatrix
+    ..translate(centerX, centerY)
+    ..rotateZ(rotationAngle)
+    ..translate(-centerX, -centerY);
 
-  // ۳. ساخت ماتریس جدید: 
-  // ابتدا هویت، سپس اعمال چرخش فعلی حول مرکز، و در نهایت اعمال اسکیل جدید
-  controller.value = Matrix4.identity()
-    ..translate(rawImageWidth / 2, rawImageHeight / 2)
-    ..rotateZ(currentAngle)
-    ..translate(-rawImageWidth / 2, -rawImageHeight / 2)
-    ..scale(targetScale);
-
-  // ۴. مرکز کردن تصویر در صفحه
-  resetToCenter(key); 
+  // ۳. حالا که ماتریس زوم ست شد، بلافاصله متد ریست خودت رو صدا می‌زنیم
+  // این همون خطیه که نباید حذف می‌شد
+  resetToCenter(key);
 
   onUpdate();
 }

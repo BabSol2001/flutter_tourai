@@ -405,9 +405,6 @@ void _handleMatrixUpdate() {
                       // مرحله ۱: زوم را اصلاح کن (عکس ممکن است به گوشه برود)
                       _viewManager.fitToScreen(viewportKey);
                       
-                      // مرحله ۲: عکس را از گوشه به مرکز کادر سیاه بیاور
-                      _viewManager.resetToCenter(viewportKey);
-                      
                       setState(() {});
                     }
                   ),
@@ -530,9 +527,9 @@ Widget _buildToolButton({
   Widget _buildStaticDebugPoint() {
     if (_viewManager.debugViewportCenter == null) return const SizedBox.shrink();
 
-    print("-----------------------------------------");
-    print("📍 DEBUG COORDINATES:");
-    print("🟢 Viewport Center (Target): ${_viewManager.debugViewportCenter}");
+    // print("-----------------------------------------");
+    // print("📍 DEBUG COORDINATES:");
+    // print("🟢 Viewport Center (Target): ${_viewManager.debugViewportCenter}");
 
   // ۱. گرفتن ماتریس فعلی از کنترلر InteractiveViewer
   final Matrix4 matrix = _transformationController.value;
@@ -545,20 +542,20 @@ Widget _buildToolButton({
   // ۳. حالا محاسبه بردار جابجایی واقعی
   final Offset displacementVector = _viewManager.debugViewportCenter! - globalPointOfImage;
 
-  print("-----------------------------------------");
-  print("📍 ACTUAL COORDINATES (Post-Transform):");
-  print("🟢 Viewport Center: ${_viewManager.debugViewportCenter}");
-  print("🔴 Image Center in Viewport Space: $globalPointOfImage"); // این عدد دیگر ۱۵۱ نخواهد بود
-  print("📐 REAL DISPLACEMENT VECTOR:");
-  print("   Vector DX: ${displacementVector.dx}");
-  print("   Vector DY: ${displacementVector.dy}");
-  print("   Required Move: ${displacementVector.distance.toStringAsFixed(2)} pixels");
+  // print("-----------------------------------------");
+  // print("📍 ACTUAL COORDINATES (Post-Transform):");
+  // print("🟢 Viewport Center: ${_viewManager.debugViewportCenter}");
+  // print("🔴 Image Center in Viewport Space: $globalPointOfImage"); // این عدد دیگر ۱۵۱ نخواهد بود
+  // print("📐 REAL DISPLACEMENT VECTOR:");
+  // print("   Vector DX: ${displacementVector.dx}");
+  // print("   Vector DY: ${displacementVector.dy}");
+  // print("   Required Move: ${displacementVector.distance.toStringAsFixed(2)} pixels");
 
     return Positioned(
-      left: _viewManager.debugViewportCenter!.dx - 5,
-      top: _viewManager.debugViewportCenter!.dy - 5,
+      left: _viewManager.debugViewportCenter!.dx - 0,
+      top: _viewManager.debugViewportCenter!.dy - 0,
       child: Container(
-        width: 10, height: 10,
+        width: 00, height: 00,
         decoration: const BoxDecoration(color: Colors.green, shape: BoxShape.circle),
       ),
     );
@@ -567,12 +564,12 @@ Widget _buildToolButton({
   // ۲. نقطه قرمز: مرکز واقعی عکس که باید با عکس جابجا شود
   Widget _buildPhotoCenterPoint() {
     if (_viewManager.debugActualImageCenter == null) return const SizedBox.shrink();
-    print("🔴 Image Center (Current): ${_viewManager.debugActualImageCenter}");
+    // print("🔴 Image Center (Current): ${_viewManager.debugActualImageCenter}");
     return Positioned(
-      left: _viewManager.debugActualImageCenter!.dx - 25,
-      top: _viewManager.debugActualImageCenter!.dy - 25,
+      left: _viewManager.debugActualImageCenter!.dx - 0,
+      top: _viewManager.debugActualImageCenter!.dy - 0,
       child: Container(
-        width: 25, height: 25,
+        width: 0, height: 0,
         decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
       ),
     );
