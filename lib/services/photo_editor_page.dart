@@ -3,9 +3,16 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'dart:math' as math; // برای دسترسی به pi
 import 'dart:async'; // این را اضافه کن
+import 'package:gal/gal.dart'; // حتما این رو بالا اضافه کن
+import 'package:intl/intl.dart'; // حتما این رو بالا اضافه کن
+import 'package:share_plus/share_plus.dart'; // حتما این را اضافه کن
+import 'package:file_picker/file_picker.dart';
+import 'dart:typed_data';
 
 import '../logic/editor/aspect_ratio_handler.dart';
 import '../logic/view_manager.dart';
+import '../logic/edit_history_manager.dart';
+import '../logic/image_processor.dart';
 
 class PhotoEditorPage extends StatefulWidget {
   final File file;
@@ -23,18 +30,22 @@ class _PhotoEditorPageState extends State<PhotoEditorPage> {
   String _helpText = ""; // متن راهنما
   String _activeTool = ""; // ابزار انتخاب شده فعلی
 
+  bool _isSaveMenuOpen = false; // در بخش State تعریف شود
+
   late ViewManager _viewManager;
   final TransformationController _transformationController = TransformationController();
   // در بخش تعریف متغیرها (State)
-  List<EditStep> _historySteps = [
-    EditStep("اصلی", {'rotation': 0.0, 'brightness': 1.0, 'tool': ""})
-  ];
+  late EditHistoryManager<Map<String, dynamic>> _historyManager;
+  // List<EditStep> _historySteps = [
+  //   EditStep("اصلی", {'rotation': 0.0, 'brightness': 1.0, 'tool': ""})
+  // ];
 
-  int _lastSavedStepIndex = 0; // در ابتدا مرحله "اصلی" ذخیره شده محسوب می‌شود
+  //int _lastSavedStepIndex = 0; // در ابتدا مرحله "اصلی" ذخیره شده محسوب می‌شود
   bool _isSaving = false; // برای مدیریت نمایش لودینگ روی دکمه ذخیره
   int _currentStepIndex = 0;
   double _brightnessValue = 1.0; // ۱.۰ یعنی نور طبیعی؛ کمتر تاریک و بیشتر روشن می‌کند
-
+  final TextEditingController _fileNameController = TextEditingController();
+  final List<String> _formats = ['JPG', 'PNG', 'WebP', 'GIF', 'BMP', 'HEIC', 'PDF'];
 
   double? _selectedRatio; // ذخیره نسبت انتخاب شده
   Size _cropAreaSize = const Size(200, 200); // اندازه پیش‌فرض کادر
@@ -71,33 +82,33 @@ class _PhotoEditorPageState extends State<PhotoEditorPage> {
     // گرفتن ابعاد عکس به محض شروع
     _viewManager.getImageDimensions(FileImage(widget.file));
 
-    // اولین مرحله تاریخچه با فایل اصلی
-    _historySteps = [
-      EditStep("اصلی", {
-        'rotation': 0.0, 
-        'brightness': 1.0, 
-        'tool': "", 
-        'file': widget.file
-      })
-    ];
-  }
+    // ۳. مقداردهی اولیه منیجر تاریخچه
+      _historyManager = EditHistoryManager<Map<String, dynamic>>();
+      _historyManager.initialize("اصلی", {
+        'rotation': 0.0,
+        'brightness': 1.0,
+        'tool': "",
+        'file': widget.file,
+      });
+    }
 
-void _handleMatrixUpdate() {
-  // فقط همگام‌سازی عدد برای نمایش در منوها
-  _viewManager.syncRotationAngle();
-  
-  setState(() {
-    // تبدیل رادیان به درجه برای نمایش در متن منو
-    double degrees = _viewManager.rotationAngle * 180 / math.pi;
-    _currentRotationDisplay = (degrees % 360 + 360) % 360;
-  });
-}
+  void _handleMatrixUpdate() {
+    // فقط همگام‌سازی عدد برای نمایش در منوها
+    _viewManager.syncRotationAngle();
+    
+    setState(() {
+      // تبدیل رادیان به درجه برای نمایش در متن منو
+      double degrees = _viewManager.rotationAngle * 180 / math.pi;
+      _currentRotationDisplay = (degrees % 360 + 360) % 360;
+    });
+  }
 
   @override
   void dispose() {
     _viewManager.dispose(); // حتما تایمرها را آزاد کنیم
     _transformationController.removeListener(_handleMatrixUpdate);
     _transformationController.dispose();
+    _fileNameController.dispose();
     super.dispose();
   }
 
@@ -254,12 +265,9 @@ void _handleMatrixUpdate() {
     );
   }
 
-
-
   double _rawImageWidth = 0;
   double _rawImageHeight = 0;
 
-  
   /// ساخت پنل داینامیک بالای صفحه (شامل ابزارهای مدیریت و تاریخچه)
   /// 
   /// این ویجت یک لایه شناور است که با استفاده از [AnimatedPositioned] جابه‌جا می‌شود:
@@ -285,11 +293,31 @@ void _handleMatrixUpdate() {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // ۱. دکمه ذخیره
-              _buildActionButton(
-                icon: Icons.save_rounded,
-                color: Colors.greenAccent,
-                onPressed: _saveFinalImage,
-              ),
+Column(
+  mainAxisSize: MainAxisSize.min,
+  children: [
+    // ۱. دکمه اصلی ذخیره (حالا در بالا قرار دارد تا ثابت بماند)
+    _buildActionButton(
+      icon: Icons.save_rounded, 
+      color: Colors.greenAccent, 
+      onPressed: () {
+        setState(() {
+          // بستن سایر منوها برای جلوگیری از تداخل
+          //_isRotationPanelOpen = false;
+          //_isPanPanelOpen = false;
+          
+          _isSaveMenuOpen = !_isSaveMenuOpen; 
+        });
+      },
+    ),
+
+    // ۲. منوی گزینه‌های ذخیره (حالا زیر دکمه باز می‌شود)
+    // با استفاده از یک سایز کوچک (مثل SizedBox) یا Margin، منو را از دکمه فاصله می‌دهیم
+    if (_isSaveMenuOpen) const SizedBox(height: 8), 
+    
+    _buildSaveMenu(),
+  ],
+),
 
               const SizedBox(width: 5),
 
@@ -307,15 +335,21 @@ void _handleMatrixUpdate() {
                     children: [
                       IconButton(
                         icon: const Icon(Icons.undo, color: Colors.white, size: 20),
-                        onPressed: _currentStepIndex > 0 ? () => _goToStep(_currentStepIndex - 1) : null,
+                        // چک کردن قابلیت Undo از طریق منیجر
+                        onPressed: _historyManager.canUndo 
+                            ? () => _goToStep(_historyManager.currentIndex - 1)
+                            : null,
                       ),
                       Expanded(
                         child: ListView.builder(
                           scrollDirection: Axis.horizontal,
-                          itemCount: _historySteps.length,
+                          itemCount: _historyManager.allSteps.length,
                           itemBuilder: (context, index) {
-                            bool isActive = index == _currentStepIndex;
-                            bool isSaved = index <= _lastSavedStepIndex;
+                            // ۱. بررسی وضعیت فعلی و وضعیت ذخیره از طریق منیجر
+                            bool isActive = index == _historyManager.currentIndex;
+                            // هر مرحله‌ای که ایندکسش کوچک‌تر یا مساوی آخرین مرحله ذخیره شده باشد، "ذخیره شده" است
+                            bool isSaved = index <= _historyManager.lastSavedIndex;
+
                             return GestureDetector(
                               onTap: () => _goToStep(index),
                               child: AnimatedContainer(
@@ -324,20 +358,24 @@ void _handleMatrixUpdate() {
                                 padding: const EdgeInsets.symmetric(horizontal: 8),
                                 margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
                                 decoration: BoxDecoration(
+                                  // رنگ پس‌زمینه کپسول: اگر ذخیره شده باشد سبز کمرنگ، در غیر این صورت شفاف
                                   color: isSaved
                                       ? Colors.greenAccent.withOpacity(isActive ? 0.8 : 0.3)
                                       : Colors.transparent,
                                   borderRadius: BorderRadius.circular(15),
                                   border: Border.all(
+                                    // رنگ حاشیه: اگر ذخیره شده سبز، در غیر این صورت سفید محو
                                     color: isSaved ? Colors.greenAccent : Colors.white30,
                                     width: 1,
                                   ),
                                 ),
                                 child: Text(
-                                  _historySteps[index].label,
+                                  _historyManager.allSteps[index].label,
                                   style: TextStyle(
+                                    // رنگ متن: سفید برای ذخیره شده‌ها، سفید مایل به خاکستری برای بقیه
                                     color: isSaved ? Colors.white : Colors.white60,
                                     fontSize: 10,
+                                    // ضخامت متن: برای مرحله‌ای که کاربر در حال مشاهده آن است (Active) بولد می‌شود
                                     fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
                                   ),
                                 ),
@@ -348,16 +386,19 @@ void _handleMatrixUpdate() {
                       ),
                       IconButton(
                         icon: const Icon(Icons.redo, color: Colors.white, size: 20),
-                        onPressed: _currentStepIndex < _historySteps.length - 1 ? () => _goToStep(_currentStepIndex + 1) : null,
+                        // استفاده از Getter هوشمند منیجر
+                        onPressed: _historyManager.canRedo 
+                            ? () => _goToStep(_historyManager.currentIndex + 1) 
+                            : null,
                       ),
                     ],
                   ),
                 ),
               ),
 
-              const SizedBox(width: 0),
+              const SizedBox(width: 5),
 
-              			  // ۳. دکمه‌های سمت راست (Help و Zoom)
+              // ۳. دکمه‌های سمت راست (Help و Zoom)
               Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -408,62 +449,59 @@ void _handleMatrixUpdate() {
                       setState(() {});
                     }
                   ),
-
-// داخل آن ستون (Column) دکمه‌های سمت راست
-const SizedBox(height: 11),
-_buildActionButton(
-  icon: Icons.open_with,
-  // اگر ابزار فعال "pan" بود، رنگ دکمه بنفش شود
-  color: _activeTool == "pan" ? Colors.purpleAccent : Colors.white70, 
-  onPressed: () {
-    setState(() {
-        _showPanMenu = !_showPanMenu;
-      
-    });
-  },
-),
+                  // داخل آن ستون (Column) دکمه‌های سمت راست
+                  const SizedBox(height: 11),
+                  _buildActionButton(
+                    icon: Icons.open_with,
+                    // اگر ابزار فعال "pan" بود، رنگ دکمه بنفش شود
+                    color: _activeTool == "pan" ? Colors.purpleAccent : Colors.white70, 
+                    onPressed: () {
+                      setState(() {
+                          _showPanMenu = !_showPanMenu;
+                        
+                      });
+                    },
+                  ),
                 ],
               ),
             ], // پایان Row اصلی
           ),
+          // ۴. استفاده از متد آماده برای منوی زوم
+          if (_showZoomMenu)
+          _viewManager.buildFloatingMenu(
+            top: 57,
+            label: "${(_transformationController.value.getMaxScaleOnAxis() * 100).toInt()}%",
+            onDecrease: () => _viewManager.changeZoomStep(false),
+            onIncrease: () => _viewManager.changeZoomStep(true),
+            onReset: () => _viewManager.resetZoom(),
+            accentColor: Colors.blueAccent,
+          ),
 
+          // ۵. استفاده از متد آماده برای منوی چرخش
+          if (_showrotateMenu)
+          _viewManager.buildFloatingMenu(
+            top: 114,
+            label: "${(_viewManager.rotationAngle * 180 / math.pi).abs().toStringAsFixed(0)}°",
+            resetText: "ZERO",
+            onDecrease: () => _viewManager.changeRotation(false),
+            onIncrease: () => _viewManager.changeRotation(true),
+            onReset: () => _viewManager.resetRotation(),
+            accentColor: Colors.orangeAccent,
+          ),
 
-            // ۴. استفاده از متد آماده برای منوی زوم
-            if (_showZoomMenu)
-            _viewManager.buildFloatingMenu(
-              top: 57,
-              label: "${(_transformationController.value.getMaxScaleOnAxis() * 100).toInt()}%",
-              onDecrease: () => _viewManager.changeZoomStep(false),
-              onIncrease: () => _viewManager.changeZoomStep(true),
-              onReset: () => _viewManager.resetZoom(),
-              accentColor: Colors.blueAccent,
-            ),
-
-            // ۵. استفاده از متد آماده برای منوی چرخش
-            if (_showrotateMenu)
-            _viewManager.buildFloatingMenu(
-              top: 114,
-              label: "${(_viewManager.rotationAngle * 180 / math.pi).abs().toStringAsFixed(0)}°",
-              resetText: "ZERO",
-              onDecrease: () => _viewManager.changeRotation(false),
-              onIncrease: () => _viewManager.changeRotation(true),
-              onReset: () => _viewManager.resetRotation(),
-              accentColor: Colors.orangeAccent,
-            ),
-
-            if (_showPanMenu)
-            _viewManager.buildFloatingPanMenu(
-                top: 230, // مقدار متناسب با دکمه پن
-                onStartPan: (dx, dy) => _viewManager.startContinuousPan(dx, dy),
-                onStop: () => _viewManager.stopContinuousPan(),
-                onCenterTap: () {
-                  _viewManager.resetToCenter(viewportKey);
-                  setState(() {}); // برای بروزرسانی نقاط دیباگ اگر روشن هستند
-                },
-              ),
-          ]
-        ),
-      );
+          if (_showPanMenu)
+          _viewManager.buildFloatingPanMenu(
+            top: 230, // مقدار متناسب با دکمه پن
+            onStartPan: (dx, dy) => _viewManager.startContinuousPan(dx, dy),
+            onStop: () => _viewManager.stopContinuousPan(),
+            onCenterTap: () {
+              _viewManager.resetToCenter(viewportKey);
+              setState(() {}); // برای بروزرسانی نقاط دیباگ اگر روشن هستند
+            },
+          ),
+        ]
+      ),
+    );
   }
 
   Widget _buildArrowCircle(IconData icon, VoidCallback onPressed) {
@@ -584,24 +622,440 @@ Widget _buildToolButton({
   /// ۳. بازخورد به کاربر: نمایش یک [SnackBar] موفقیت‌آمیز پس از اتمام فرآیند.
   /// ۴. پایداری: استفاده از [mounted] برای جلوگیری از خطای حافظه در صورتی که کاربر قبل از اتمام ذخیره، صفحه را ببندد.
   void _saveFinalImage() async {
-    setState(() => _isSaving = true);
-    
-    // شبیه‌سازی فرآیند ذخیره
-    await Future.delayed(const Duration(seconds: 2));
+    // اگر در مرحله‌ای هستیم که قبلاً ذخیره شده، پردازش مجدد نکن
+   setState(() => _isSaving = true);
+  try {
+    // ۱. پردازش و جایگزینی روی فایل اصلی
+    final File processedFile = await ImageProcessor.applyAndSave(
+      sourceFile: widget.file,
+      brightness: _brightnessValue,
+      rotationRadians: _rotationAngle,
+    );
 
     if (mounted) {
       setState(() {
+        _currentFile = processedFile; // نمایش فایل جدید
+        _historyManager.markAsSaved(); // تثبیت تاریخچه
         _isSaving = false;
-        // مهم: ثبت ایندکس فعلی به عنوان آخرین وضعیت ذخیره شده
-        _lastSavedStepIndex = _currentStepIndex; 
       });
+      _showSnackBar("تغییرات با موفقیت روی فایل اصلی ذخیره شد ✅");
+    }
+  } catch (e) {
+    setState(() => _isSaving = false);
+    _showSnackBar("خطا در ذخیره‌سازی: $e");
+  }
+}
+
+  void _showSaveConfirmationDialog() {
+  showDialog(
+    context: context,
+    builder: (context) => AlertDialog(
+      backgroundColor: Colors.grey[900],
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+      title: const Text("ذخیره تغییرات", 
+        textAlign: TextAlign.right,
+        style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+      content: const Text("آیا می‌خواهید تغییرات بر روی فایل اصلی ذخیره شود؟ این عمل فایل قدیمی را جایگزین می‌کند.",
+        textAlign: TextAlign.right,
+        style: TextStyle(color: Colors.white70)),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text("انصراف", style: TextStyle(color: Colors.white60)),
+        ),
+        TextButton(
+          onPressed: () {
+            Navigator.pop(context);
+            _exportAction(); // رفتن به منوی Save As
+          },
+          child: const Text("Save As...", style: TextStyle(color: Colors.blueAccent)),
+        ),
+        ElevatedButton(
+          style: ElevatedButton.styleFrom(backgroundColor: Colors.green[800]),
+          onPressed: () {
+            Navigator.pop(context); // بستن دیالوگ
+            _saveFinalImage(); // اینجا اتصال برقرار شد!
+          },
+          child: const Text("ذخیره"),
+        ),
+      ],
+    ),
+  );
+}
+
+  void _shareAction() async {
+    setState(() => _isSaving = true); // نمایش لودینگ مختصر
+    try {
+      // ایجاد یک نام موقت برای فایلی که قرار است به اشتراک گذاشته شود
+      String timestamp = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
       
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("تغییرات تا این مرحله ذخیره شدند"), backgroundColor: Colors.green),
+      // اشتراک‌گذاری نسخه فعلی تصویر
+      await Share.shareXFiles(
+        [XFile(_currentFile.path)],
+        text: 'تصویر ویرایش شده با اپلیکیشن Tourai AI',
+        subject: 'اشتراک‌گذاری عکس',
       );
+    } catch (e) {
+      _showSnackBar("خطا در اشتراک‌گذاری ❌");
+    } finally {
+      setState(() => _isSaving = false);
     }
   }
 
+  Widget _buildSaveMenu() {
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 300),
+      height: _isSaveMenuOpen ? 200 : 0, 
+      width: 50,
+      curve: Curves.easeInOut,
+      margin: const EdgeInsets.only(top: 8),
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.black87,
+        borderRadius: BorderRadius.circular(25),
+        border: Border.all(color: Colors.white24),
+      ),
+      // استفاده از ClipRRect برای اینکه آیکون‌ها در لحظه باز شدن از کادر گرد بیرون نزنند
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(25),
+        child: SingleChildScrollView(
+          // جلوگیری از اسکرول خوردن توسط کاربر
+          physics: const NeverScrollableScrollPhysics(), 
+          child: SizedBox(
+            // ارتفاع ثابت اینجا باعث می‌شود Column فضای لازم برای چیدمان را داشته باشد
+            height: 184, // کمی کمتر از ۲۰۰ (بخاطر padding)
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                _buildSaveOption(Icons.save, "ذخیره روی نسخه فعلی", _showSaveConfirmationDialog),
+                _buildSaveOption(Icons.save_as, "ذخیره به عنوان کپی", _saveAsCopyAction),
+                _buildSaveOption(Icons.save_alt_rounded, "خروجی با فرمت PNG", _exportAction),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _saveAsCopyAction() {
+    // ۱. بستن منوی کوچک ذخیره (تا روی دیالوگ باز نماند)
+    setState(() => _isSaveMenuOpen = false);
+    
+    // ۲. باز کردن پنل پایین برای گرفتن نام فایل
+    _showSaveAsDialog();
+  }
+
+  void _executeSaveAs(String name) async {
+    if (name.trim().isEmpty) return;
+
+    setState(() => _isSaving = true);
+    try {
+      // ۱. پردازش تصویر
+      final File tempFile = await ImageProcessor.applyAndSave(
+        sourceFile: widget.file,
+        brightness: _brightnessValue,
+        rotationRadians: _rotationAngle,
+      );
+
+      // ۲. کپی در پوشه اسناد (همان کد قبلی خودت)
+      final File finalFile = await ImageProcessor.saveAsCopy(tempFile, name);
+
+      // ۳. اضافه کردن به گالری گوشی (بخش اصلی برای نمایش در Photos)
+      await Gal.putImage(finalFile.path); 
+
+      if (mounted) {
+        _showSnackBar("عکس با نام $name در گالری ذخیره شد ✅");
+      }
+      
+    } catch (e) {
+      print("خطا در ذخیره گالری: $e");
+      if (mounted) _showSnackBar("خطا در دسترسی به گالری");
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
+  }
+
+  void _showSaveAsDialog() {
+    // ۱. ساخت فرمت زمان به صورت ساده و خوانا
+    // خروجی چیزی شبیه این می‌شود: copy_20260503_194530
+    String timestamp = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
+    
+    // ۲. قرار دادن فقط واژه copy و زمان در فیلد متن
+    _fileNameController.text = "copy_$timestamp";    
+    // ۲. باز کردن پنل از پایین (Bottom Sheet)
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true, // مهم: برای اینکه وقتی کیبورد باز می‌شود، منو بالا برود
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(context).viewInsets.bottom + 20, // ایجاد فاصله برای کیبورد
+          top: 20,
+          left: 20,
+          right: 20,
+        ),
+        decoration: const BoxDecoration(
+          color: Colors.black87,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              "ذخیره نسخه جدید",
+              style: TextStyle(
+                color: Colors.white, 
+                fontSize: 18, 
+                fontWeight: FontWeight.bold,
+                fontFamily: 'Vazir', // اگر فونت داری
+              ),
+            ),
+            const SizedBox(height: 15),
+            TextField(
+              controller: _fileNameController,
+              autofocus: true, // به محض باز شدن کیبورد را بالا می‌آورد
+              style: const TextStyle(color: Colors.white),
+              decoration: InputDecoration(
+                hintText: "نام فایل را اینجا بنویسید...",
+                hintStyle: const TextStyle(color: Colors.white38),
+                enabledBorder: OutlineInputBorder(
+                  borderSide: const BorderSide(color: Colors.white24),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderSide: const BorderSide(color: Colors.greenAccent),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                filled: true,
+                fillColor: Colors.white10,
+              ),
+            ),
+            const SizedBox(height: 20),
+            Row(
+              children: [
+                // دکمه انصراف
+                Expanded(
+                  child: TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text("انصراف", style: TextStyle(color: Colors.white60)),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                // دکمه ذخیره اصلی
+                Expanded(
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.greenAccent,
+                      foregroundColor: Colors.black,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    onPressed: () {
+                      String newName = _fileNameController.text;
+                      Navigator.pop(context); // بستن پنل
+                      _executeSaveAs(newName); // اجرای عملیات اصلی ذخیره
+                    },
+                    child: const Text("ذخیره", style: TextStyle(fontWeight: FontWeight.bold)),
+                  ),
+                ),
+
+                Expanded(
+                  child: IconButton(
+                    icon: const Icon(Icons.share_outlined, color: Colors.blueAccent),
+                    onPressed: _shareAction,
+                    tooltip: 'اشتراک‌گذاری مستقیم',
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _exportAction() async {
+    // ۱. تنظیمات اولیه نام (شبیه Save As)
+    String timestamp = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
+    _fileNameController.text = "export_$timestamp";
+    String localSelectedFormat = 'JPG'; // فرمت پیش‌فرض داخلی برای دیالوگ
+
+    // ۲. نمایش دیالوگ ترکیبی (نام + فرمت)
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => StatefulBuilder( // برای اینکه تغییر فرمت در لحظه دیده شود
+        builder: (context, setModalState) => Container(
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+            top: 20, left: 20, right: 20,
+          ),
+          decoration: const BoxDecoration(
+            color: Colors.black87,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text("خروجی گرفتن (Export)",
+                  style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 20),
+              
+              // فیلد نام فایل
+              TextField(
+                controller: _fileNameController,
+                autofocus: true,
+                style: const TextStyle(color: Colors.white),
+                decoration: InputDecoration(
+                  labelText: "نام فایل",
+                  labelStyle: const TextStyle(color: Colors.white60),
+                  filled: true,
+                  fillColor: Colors.white10,
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+              ),
+              const SizedBox(height: 15),
+
+              // منوی انتخاب فرمت
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                decoration: BoxDecoration(
+                  color: Colors.white10,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.white24),
+                ),
+                child: DropdownButton<String>(
+                  value: localSelectedFormat,
+                  dropdownColor: Colors.grey[900],
+                  isExpanded: true,
+                  underline: const SizedBox(),
+                  style: const TextStyle(color: Colors.white),
+                  items: ['JPG', 'PNG', 'WebP', 'GIF', 'BMP', 'HEIC', 'PDF']
+                      .map((f) => DropdownMenuItem(value: f, child: Text(f)))
+                      .toList(),
+                  onChanged: (val) {
+                    setModalState(() => localSelectedFormat = val!);
+                  },
+                ),
+              ),
+              const SizedBox(height: 20),
+
+              // دکمه تایید نهایی
+              Row(
+                children: [
+                  // دکمه انصراف
+                  Expanded(
+                    child: TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text("انصراف", style: TextStyle(color: Colors.white60)),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+
+                  Expanded(
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.blueAccent,
+                      minimumSize: const Size(double.infinity, 50),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    onPressed: () {
+                      String finalName = _fileNameController.text.trim();
+                      Navigator.pop(context); // بستن دیالوگ
+                      _executeExportLogic(finalName, localSelectedFormat); // اجرای منطق اکسپورت
+                    },
+                    child: const Text(" ذخیره ", style: TextStyle(fontWeight: FontWeight.bold)),
+                  ),
+                  ),
+
+                  Expanded(
+                  child: IconButton(
+                      icon: const Icon(Icons.share_outlined, color: Colors.blueAccent),
+                      onPressed: _shareAction,
+                      tooltip: 'اشتراک‌گذاری مستقیم',
+                    ),
+                  ),
+                ],
+              )
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // متد کمکی برای اجرای منطق اکسپورت (جدا کردیم که کد شلوغ نشود)
+  void _executeExportLogic(String name, String format) async {
+  setState(() => _isSaving = true);
+  try {
+    // ۱. ساخت فایل در پوشه موقت (مثل قبل)
+    File tempFile = await ImageProcessor.exportImage(
+      sourceFile: _currentFile,
+      format: format,
+      fileName: name,
+    );
+
+    if (format.toUpperCase() == 'PDF') {
+      // ۲. خواندن بایت‌های فایل (این همان چیزی است که پکیج می‌خواهد)
+      Uint8List fileBytes = await tempFile.readAsBytes();
+
+      // ۳. فراخوانی متد ذخیره با پارامتر bytes
+      // نکته: روی موبایل پارامتر bytes اجباری است
+      String? outputFile = await FilePicker.saveFile(
+        dialogTitle: 'محل ذخیره فایل PDF را انتخاب کنید',
+        fileName: '$name.pdf',
+        bytes: fileBytes, // اضافه شدن بایت‌ها
+      );
+
+      if (outputFile != null) {
+        _showSnackBar("فایل PDF با موفقیت ذخیره شد 📄");
+      } else {
+        _showSnackBar("ذخیره لغو شد");
+      }
+      
+    } else {
+      // برای بقیه فرمت‌ها در گالری
+      await Gal.putImage(tempFile.path);
+      _showSnackBar("فایل در گالری ذخیره شد ✅");
+    }
+
+  } catch (e) {
+    print("Export Error: $e");
+    _showSnackBar("خطا در ذخیره‌سازی رخ داد");
+  } finally {
+    setState(() => _isSaving = false);
+  }
+}
+
+void _showSnackBar(String message) {
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(content: Text(message), backgroundColor: Colors.green),
+  );
+}
+
+ Widget _buildSaveOption(IconData icon, String title, VoidCallback onTap) {
+  return Tooltip(
+    message: title, // متنی که با نگه داشتن دست ظاهر می‌شود
+    preferBelow: false, // تول‌تیپ را بالای آیکون نشان دهد (یا کنار)
+    child: InkWell(
+      onTap: () {
+        setState(() => _isSaveMenuOpen = false); // بستن منو بعد از انتخاب
+        onTap();
+      },
+      child: Padding(
+        padding: const EdgeInsets.all(10.0),
+        child: Icon(
+          icon, 
+          color: Colors.greenAccent, 
+          size: 22
+        ),
+      ),
+    ),
+  );
+}
+    
   /// مدیریت سیستم تاریخچه تعاملی (Undo/Redo Logic)
   /// 
   /// این متد قلب سیستم مدیریت وضعیت برنامه است که وظایف زیر را انجام می‌دهد:
@@ -613,29 +1067,13 @@ Widget _buildToolButton({
   ///    رابط کاربری دقیقاً مرحله جدید را به عنوان مرحله فعال نشان دهد.
   void _addToHistory(String label) {
     setState(() {
-      // ۱. اگر کاربر چند مرحله عقب رفته باشد و تغییر جدیدی ایجاد کند، 
-      // مراحل جلوتر از لیست حذف می‌شوند (مثل فتوشاپ)
-      if (_currentStepIndex < _historySteps.length - 1) {
-        _historySteps = _historySteps.sublist(0, _currentStepIndex + 1);
-      }
-
-      // ۲. ثبت وضعیت فعلی متغیرها در یک نقشه (Map)
-      Map<String, dynamic> currentState = {
-        'rotation': _rotationAngle,
+      // استفاده از متد addStep که خودش مدیریت انشعاب (Branching) را انجام می‌دهد
+      _historyManager.addStep(label, {
+        'rotation': _viewManager.rotationAngle, // از ویو منیجر می‌گیریم
         'brightness': _brightnessValue,
         'tool': _activeTool,
-        'file': _currentFile, // ذخیره فایل فعلی در این مرحله از تاریخچه
-        // در آینده موارد دیگر مثل فیلتر و ابعاد را اینجا اضافه می‌کنیم
-      };
-
-      // ۳. اضافه کردن یک مرحله جدید به لیست تاریخچه
-      _historySteps.add(EditStep(label, currentState));
-      
-      // ۴. بردن نشانگر وضعیت به آخرین مرحله اضافه شده
-      _currentStepIndex = _historySteps.length - 1;
-      
-      // ۵. از آنجا که تغییری رخ داده، ایندکس آخرین ذخیره (فلاپی) با ایندکس فعلی متفاوت می‌شود
-      // (این باعث می‌شود آیتم جدید در نوار بالا "Outline" بماند و سبز نشود)
+        'file': _currentFile,
+      });
     });
   }
 
@@ -672,32 +1110,36 @@ Widget _buildToolButton({
   /// ۳. پویایی راهنما: متن راهنمای بالای صفحه را متناسب با ابزاری که در آن مرحله فعال بوده، به‌روزرسانی می‌کند.
   /// ۴. ایمنی داده: با استفاده از عملگر [??]، از بروز خطا در صورت نبودن یکی از پارامترها در مراحل قدیمی جلوگیری می‌کند.
   void _goToStep(int index) {
-    // بررسی اینکه ایندکس در محدوده لیست باشد
-    if (index >= 0 && index < _historySteps.length) {
-      setState(() {
-        _currentStepIndex = index;
-        final step = _historySteps[index];
-        // استخراج اطلاعات مرحله
-        var targetState = step.state;
-        
-        // بازگرداندن مقادیر ذخیره شده به متغیرهای صفحه
-        // استفاده از ?? برای زمانی که شاید مقداری در آن مرحله ذخیره نشده باشد
-        _rotationAngle = targetState['rotation'] ?? 0.0;
-        _brightnessValue = targetState['brightness'] ?? 1.0;
-        _activeTool = targetState['tool'] ?? "";
-        
-        // آپدیت متن راهنما بر اساس ابزار فعال در آن مرحله
-        if (_activeTool.isNotEmpty) {
-          _helpText = "تنظیمات مربوط به $_activeTool را تغییر دهید";
-        }
+    // یک چک ساده برای اطمینان از اینکه ایندکس معتبر است
+    if (index < 0 || index >= _historyManager.allSteps.length) return;
 
-        // بازیابی فایل تصویر مربوط به آن مرحله
-        if (step.state.containsKey('file')) {
-          _currentFile = step.state['file'];
-        }
+    setState(() {
+      // ۱. جابجایی در تاریخچه
+      _historyManager.goToStep(index);
+      
+      // ۲. دریافت اطلاعات آن مرحله
+      final step = _historyManager.currentStep; 
+      final Map<String, dynamic> targetState = step.state;
 
-      });
-    }
+      // ۳. بازیابی متغیرهای لایه UI
+      _brightnessValue = targetState['brightness'] ?? 1.0;
+      _activeTool = targetState['tool'] ?? "";
+      _currentFile = targetState['file'] ?? widget.file;
+      
+      // ۴. بازگرداندن زاویه چرخش (بسیار مهم برای نمایش درست)
+      if (targetState.containsKey('rotation')) {
+        _rotationAngle = targetState['rotation'];
+        // آپدیت کردن ماتریس نمایش در ویو منیجر
+        _viewManager.setRotation(_rotationAngle);
+      }
+
+      // ۵. به‌روزرسانی متن راهنما
+      if (_activeTool.isNotEmpty) {
+        _helpText = "تنظیمات مربوط به $_activeTool را تغییر دهید";
+      } else {
+        _helpText = "یک ابزار انتخاب کنید";
+      }
+    });
   }
 
   /// ساخت نوار ابزار عمودی کناری (Side Navigation Toolbar)
@@ -1063,24 +1505,3 @@ Widget _buildPanButton(IconData icon, double dx, double dy) {
 }
 
 }
-
-/// مدل داده‌ای برای ذخیره "کپسول" وضعیت در هر مرحله
-/// 
-/// این کلاس [EditStep] وظیفه دارد یک اسنپ‌شات (Snapshot) کامل از تمام 
-/// تنظیمات برنامه را در یک لحظه خاص ذخیره کند
-class EditStep {
-  final String label; // مثلاً "چرخش +۹۰"
-  final Map<String, dynamic> state; // ذخیره مقادیر عددی در آن لحظه
-
-  EditStep(this.label, this.state);
-}
-
-/// مدیریت مخزن تاریخچه و موقعیت فعلی کاربر
-/// 
-/// [_historySteps]: لیستی از تمام مراحلی که کاربر طی کرده است. 
-/// اولین آیتم همیشه "اصلی" است تا راه بازگشت به عکس خام باز باشد.
-/// 
-/// [_currentStepIndex]: نشانگر یا "هد" سیستم تاریخچه است که مشخص می‌کند 
-/// کاربر در حال حاضر در کدام مرحله از لیست قرار دارد (برای Undo/Redo).
-List<EditStep> _historySteps = [EditStep("اصلی", {})]; // نقطه شروع
-int _currentStepIndex = 0;

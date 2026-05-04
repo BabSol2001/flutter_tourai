@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:vector_math/vector_math_64.dart' show Vector3;
 
 import '../services/photo_editor_page.dart';
+
 /// کلاس مدیریت نمایش و تحولات تصویر (View & Transformation Manager)
 /// 
 /// این کلاس وظایف زیر را بر عهده دارد:
@@ -128,6 +129,16 @@ void changeRotation(bool clockwise) {
     
     rotationAngle = 0.0; // صفر کردن متغیر عددی
     onUpdate();
+  }
+
+  void setRotation(double angle) {
+    // ساخت یک ماتریس جدید که فقط زاویه مشخص شده را دارد
+    // ما مقیاس (Scale) را ۱ نگه می‌داریم تا تصویر زوم نشود
+    final Matrix4 newMatrix = Matrix4.identity()
+      ..rotateZ(angle);
+      
+    controller.value = newMatrix;
+    onUpdate(); // اطلاع به UI برای بازسازی (Rebuild)
   }
 
   // --- بخش منطق زوم (Zoom Logic) ---
