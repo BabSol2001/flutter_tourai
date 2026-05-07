@@ -1,9 +1,7 @@
 import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
-import 'package:vector_math/vector_math_64.dart' show Vector3;
 
-import '../services/photo_editor_page.dart';
 
 /// کلاس مدیریت نمایش و تحولات تصویر (View & Transformation Manager)
 /// 
@@ -367,132 +365,167 @@ void stopContinuousPan() {
     );
   }
 
-  // در فایل view_manager.dart
-
-// در فایل view_manager.dart
-
-Widget buildFloatingPanMenu({
-  required double top,
-  required VoidCallback onStop,
-  required Function(double dx, double dy) onStartPan,
-  required VoidCallback onCenterTap, // پارامتر جدید برای مرکز کردن
-}) {
-  return Positioned(
-    right: 65,
-    top: top,
-    child: Container(
-      padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        color: Colors.black.withOpacity(0.85),
-        borderRadius: BorderRadius.circular(25),
-        border: Border.all(color: Colors.white24),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _buildDirectionalButton(Icons.keyboard_arrow_up, () => onStartPan(0, -10), onStop),
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _buildDirectionalButton(Icons.keyboard_arrow_left, () => onStartPan(-10, 0), onStop),
-              
-              // --- دکمه مرکز (نقطه) ---
-              GestureDetector(
-                onTap: onCenterTap,
-                child: Container(
-                  margin: const EdgeInsets.symmetric(horizontal: 8),
-                  width: 35,
-                  height: 35,
-                  decoration: BoxDecoration(
-                    color: Colors.greenAccent.withOpacity(0.2),
-                    shape: BoxShape.circle,
-                    border: Border.all(color: Colors.greenAccent, width: 1.5),
-                  ),
-                  child: const Center(
-                    child: Icon(Icons.fiber_manual_record, color: Colors.greenAccent, size: 14),
+  Widget buildFloatingPanMenu({
+    required double top,
+    required VoidCallback onStop,
+    required Function(double dx, double dy) onStartPan,
+    required VoidCallback onCenterTap, // پارامتر جدید برای مرکز کردن
+  }) {
+    return Positioned(
+      right: 65,
+      top: top,
+      child: Container(
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+          color: Colors.black.withOpacity(0.85),
+          borderRadius: BorderRadius.circular(25),
+          border: Border.all(color: Colors.white24),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _buildDirectionalButton(Icons.keyboard_arrow_up, () => onStartPan(0, -10), onStop),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _buildDirectionalButton(Icons.keyboard_arrow_left, () => onStartPan(-10, 0), onStop),
+                
+                // --- دکمه مرکز (نقطه) ---
+                GestureDetector(
+                  onTap: onCenterTap,
+                  child: Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 8),
+                    width: 35,
+                    height: 35,
+                    decoration: BoxDecoration(
+                      color: Colors.greenAccent.withOpacity(0.2),
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.greenAccent, width: 1.5),
+                    ),
+                    child: const Center(
+                      child: Icon(Icons.fiber_manual_record, color: Colors.greenAccent, size: 14),
+                    ),
                   ),
                 ),
-              ),
-              
-              _buildDirectionalButton(Icons.keyboard_arrow_right, () => onStartPan(10, 0), onStop),
-            ],
-          ),
-          _buildDirectionalButton(Icons.keyboard_arrow_down, () => onStartPan(0, 10), onStop),
-        ],
+                
+                _buildDirectionalButton(Icons.keyboard_arrow_right, () => onStartPan(10, 0), onStop),
+              ],
+            ),
+            _buildDirectionalButton(Icons.keyboard_arrow_down, () => onStartPan(0, 10), onStop),
+          ],
+        ),
       ),
-    ),
-  );
-}
+    );
+  }
 
-// ویجت کمکی برای دکمه‌های جهت‌دار داخل منو
-Widget _buildDirectionalButton(IconData icon, VoidCallback onStart, VoidCallback onStop) {
-  return GestureDetector(
-    // ۱. برای ضربه کوتاه (Short Tap): فقط یکبار متد حرکت را اجرا می‌کند و بلافاصله متوقف می‌شود
-    onTap: () {
-      onStart();
-      // یک تاخیر بسیار کوتاه برای اینکه فقط یک پله جابجا شود و بعد تایمر متوقف شود
-      Future.delayed(const Duration(milliseconds: 50), () => onStop());
-    },
+  // ویجت کمکی برای دکمه‌های جهت‌دار داخل منو
+  Widget _buildDirectionalButton(IconData icon, VoidCallback onStart, VoidCallback onStop) {
+    return GestureDetector(
+      // ۱. برای ضربه کوتاه (Short Tap): فقط یکبار متد حرکت را اجرا می‌کند و بلافاصله متوقف می‌شود
+      onTap: () {
+        onStart();
+        // یک تاخیر بسیار کوتاه برای اینکه فقط یک پله جابجا شود و بعد تایمر متوقف شود
+        Future.delayed(const Duration(milliseconds: 50), () => onStop());
+      },
 
-    // ۲. برای نگه داشتن انگشت (Long Press): حرکت پیوسته تا زمان رها کردن
-    onLongPressStart: (_) => onStart(),
-    onLongPressEnd: (_) => onStop(),
+      // ۲. برای نگه داشتن انگشت (Long Press): حرکت پیوسته تا زمان رها کردن
+      onLongPressStart: (_) => onStart(),
+      onLongPressEnd: (_) => onStop(),
+      
+      // ۳. احتیاط برای زمانی که انگشت از روی دکمه سُر می‌خورد
+      onLongPressMoveUpdate: (details) {
+        // اگر انگشت خیلی از دکمه دور شد، متوقف کن
+        if (details.localOffsetFromOrigin.distance > 50) onStop();
+      },
+      child: Container(
+        margin: const EdgeInsets.all(2),
+        padding: const EdgeInsets.all(6),
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.1),
+          shape: BoxShape.circle,
+        ),
+        child: Icon(icon, color: Colors.white, size: 20),
+      ),
+    );
+  }
+
+  // در فایل view_manager.dart
+
+  void resetToCenter(GlobalKey key) {
+    // ۱. گرفتن RenderBox کانتینر سیاه
+    final RenderBox? renderBox = key.currentContext?.findRenderObject() as RenderBox?;
+    if (renderBox == null || rawImageWidth == 0) return;
+
+    // ۲. مرکز محدوده نمایش (Target) - در دستگاه مختصات محلی
+    final Offset viewportCenter = Offset(renderBox.size.width / 2, renderBox.size.height / 2);
+
+    // ۳. مرکز عکس را ابتدا با ماتریس تبدیل می‌کنیم (این نقطه معمولاً نسبت به والد است)
+    // final Offset globalImageCenter = MatrixUtils.transformPoint(
+    //   controller.value, 
+    //   Offset(rawImageWidth / 2, rawImageHeight / 2)
+    // );
+
+    // // ۴. حیاتی‌ترین بخش: تبدیل نقطه به دستگاه مختصات محلی کانتینر سیاه
+    // // این خط تضمین می‌کند که هر دو نقطه در یک دستگاه مختصات سنجیده شوند
+    // final Offset localImageCenter = renderBox.globalToLocal(globalImageCenter);
+
+    // // ۵. محاسبه اختلاف در همان دستگاه مختصات مشترک
+    // final Offset displacement = viewportCenter - localImageCenter;
+
+    // // ۶. استفاده از متد سالم برای جابه‌جایی
+    // handleGestureManualPan(displacement);
+
+    // برای تست چشمی:
+    debugViewportCenter = viewportCenter;
+    debugActualImageCenter = MatrixUtils.transformPoint(
+      controller.value, 
+      Offset(rawImageWidth / 2, rawImageHeight / 2)
+    );
+    final Offset localPoint = debugActualImageCenter!; 
+    final Offset globalPointOfImage = MatrixUtils.transformPoint(controller.value, localPoint);
+    final Offset displacementVector = debugViewportCenter! - globalPointOfImage;
+
+    handleGestureManualPan(displacementVector);  
+    onUpdate();
+  }
+
+ /// تمرکز هوشمند بر اساس خروجی هوش مصنوعی (مختصات و زاویه)
+  void smartFocus({
+    required Rect objectRect,      // مستطیلی که از بک‌اِند (object_rect) گرفتیم
+    required double rotationAngle, // زاویه‌ای که از بک‌اِند (suggested_rotation) گرفتیم
+    required GlobalKey viewportKey,
+    double padding = 40.0,
+  }) {
+    final renderBox = viewportKey.currentContext?.findRenderObject() as RenderBox?;
+    // بررسی وجود رندر باکس و ابعاد تصویر اصلی
+    if (renderBox == null || rawImageWidth == 0) return;
+
+    // ۱. محاسبه ابعاد فضای نمایش تصویر در موبایل (با کسر پدینگ)
+    double viewW = renderBox.size.width - (padding * 2);
+    double viewH = renderBox.size.height - (padding * 2);
+
+    // ۲. محاسبه مقیاس زوم (Scale)
+    // هدف: سوژه دقیقاً در مرکز کادر جا شود
+    double scaleX = viewW / objectRect.width;
+    double scaleY = viewH / objectRect.height;
     
-    // ۳. احتیاط برای زمانی که انگشت از روی دکمه سُر می‌خورد
-    onLongPressMoveUpdate: (details) {
-      // اگر انگشت خیلی از دکمه دور شد، متوقف کن
-      if (details.localOffsetFromOrigin.distance > 50) onStop();
-    },
-    child: Container(
-      margin: const EdgeInsets.all(2),
-      padding: const EdgeInsets.all(6),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.1),
-        shape: BoxShape.circle,
-      ),
-      child: Icon(icon, color: Colors.white, size: 20),
-    ),
-  );
-}
+    // انتخاب کمترین مقیاس برای اینکه کل شیء دیده شود (محدوده بین ۰.۵ تا ۵ برابر زوم)
+    double targetScale = (scaleX < scaleY ? scaleX : scaleY).clamp(0.5, 5.0);
 
-// در فایل view_manager.dart
+    // ۳. پیدا کردن مرکز ویوپورت (نقطه وسط صفحه گوشی)
+    Offset viewCenter = Offset(renderBox.size.width / 2, renderBox.size.height / 2);
 
-void resetToCenter(GlobalKey key) {
-  // ۱. گرفتن RenderBox کانتینر سیاه
-  final RenderBox? renderBox = key.currentContext?.findRenderObject() as RenderBox?;
-  if (renderBox == null || rawImageWidth == 0) return;
+    // ۴. ساخت ماتریس تغییر وضعیت (Transformation Matrix)
+    // ترتیب عملیات برای چرخش حول مرکز شیء بسیار مهم است:
+    final Matrix4 targetMatrix = Matrix4.identity()
+      ..translate(viewCenter.dx, viewCenter.dy) // انتقال به مرکز ویو
+      ..scale(targetScale)                      // اعمال زوم
+      ..rotateZ(rotationAngle)                  // اعمال زاویه اصلاحی (رادیان)
+      ..translate(-objectRect.center.dx, -objectRect.center.dy); // تنظیم مرکز سوژه در مرکز تصویر
 
-  // ۲. مرکز محدوده نمایش (Target) - در دستگاه مختصات محلی
-  final Offset viewportCenter = Offset(renderBox.size.width / 2, renderBox.size.height / 2);
-
-  // ۳. مرکز عکس را ابتدا با ماتریس تبدیل می‌کنیم (این نقطه معمولاً نسبت به والد است)
-  // final Offset globalImageCenter = MatrixUtils.transformPoint(
-  //   controller.value, 
-  //   Offset(rawImageWidth / 2, rawImageHeight / 2)
-  // );
-
-  // // ۴. حیاتی‌ترین بخش: تبدیل نقطه به دستگاه مختصات محلی کانتینر سیاه
-  // // این خط تضمین می‌کند که هر دو نقطه در یک دستگاه مختصات سنجیده شوند
-  // final Offset localImageCenter = renderBox.globalToLocal(globalImageCenter);
-
-  // // ۵. محاسبه اختلاف در همان دستگاه مختصات مشترک
-  // final Offset displacement = viewportCenter - localImageCenter;
-
-  // // ۶. استفاده از متد سالم برای جابه‌جایی
-  // handleGestureManualPan(displacement);
-
-  // برای تست چشمی:
-  debugViewportCenter = viewportCenter;
-  debugActualImageCenter = MatrixUtils.transformPoint(
-    controller.value, 
-    Offset(rawImageWidth / 2, rawImageHeight / 2)
-  );
-  final Offset localPoint = debugActualImageCenter!; 
-  final Offset globalPointOfImage = MatrixUtils.transformPoint(controller.value, localPoint);
-  final Offset displacementVector = debugViewportCenter! - globalPointOfImage;
-
-  handleGestureManualPan(displacementVector);  
-  onUpdate();
-}
-
+    // ۵. اعمال ماتریس به کنترلر و بروزرسانی رابط کاربری
+    // برای نرم شدن این حرکت، از Matrix4Tween استفاده کنید (که در پیام قبلی توضیح دادم)
+    controller.value = targetMatrix;
+    onUpdate();
+  }
 }

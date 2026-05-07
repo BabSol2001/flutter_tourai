@@ -2,7 +2,7 @@ import 'dart:io';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'dart:math' as math; // برای دسترسی به pi
-import 'dart:async'; // این را اضافه کن
+// این را اضافه کن
 import 'package:gal/gal.dart'; // حتما این رو بالا اضافه کن
 import 'package:intl/intl.dart'; // حتما این رو بالا اضافه کن
 import 'package:share_plus/share_plus.dart'; // حتما این را اضافه کن
@@ -42,7 +42,7 @@ class _PhotoEditorPageState extends State<PhotoEditorPage> {
 
   //int _lastSavedStepIndex = 0; // در ابتدا مرحله "اصلی" ذخیره شده محسوب می‌شود
   bool _isSaving = false; // برای مدیریت نمایش لودینگ روی دکمه ذخیره
-  int _currentStepIndex = 0;
+  final int _currentStepIndex = 0;
   double _brightnessValue = 1.0; // ۱.۰ یعنی نور طبیعی؛ کمتر تاریک و بیشتر روشن می‌کند
   final TextEditingController _fileNameController = TextEditingController();
   final List<String> _formats = ['JPG', 'PNG', 'WebP', 'GIF', 'BMP', 'HEIC', 'PDF'];
@@ -61,6 +61,10 @@ class _PhotoEditorPageState extends State<PhotoEditorPage> {
 
 
   final GlobalKey viewportKey = GlobalKey();
+
+  // در بخش تعریف متغیرهای کلاس
+  Map<String, dynamic>? serverResultData; // دیتای دریافتی از جنگو اینجا ذخیره می‌شود
+  bool _isProcessing = false; // برای نمایش لودینگ
 
   /// مقداردهی اولیه وضعیت برنامه (State)
   /// در این مرحله:
@@ -265,8 +269,8 @@ class _PhotoEditorPageState extends State<PhotoEditorPage> {
     );
   }
 
-  double _rawImageWidth = 0;
-  double _rawImageHeight = 0;
+  final double _rawImageWidth = 0;
+  final double _rawImageHeight = 0;
 
   /// ساخت پنل داینامیک بالای صفحه (شامل ابزارهای مدیریت و تاریخچه)
   /// 
@@ -293,31 +297,31 @@ class _PhotoEditorPageState extends State<PhotoEditorPage> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // ۱. دکمه ذخیره
-Column(
-  mainAxisSize: MainAxisSize.min,
-  children: [
-    // ۱. دکمه اصلی ذخیره (حالا در بالا قرار دارد تا ثابت بماند)
-    _buildActionButton(
-      icon: Icons.save_rounded, 
-      color: Colors.greenAccent, 
-      onPressed: () {
-        setState(() {
-          // بستن سایر منوها برای جلوگیری از تداخل
-          //_isRotationPanelOpen = false;
-          //_isPanPanelOpen = false;
-          
-          _isSaveMenuOpen = !_isSaveMenuOpen; 
-        });
-      },
-    ),
+              Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // ۱. دکمه اصلی ذخیره (حالا در بالا قرار دارد تا ثابت بماند)
+                  _buildActionButton(
+                    icon: Icons.save_rounded, 
+                    color: Colors.greenAccent, 
+                    onPressed: () {
+                      setState(() {
+                        // بستن سایر منوها برای جلوگیری از تداخل
+                        //_isRotationPanelOpen = false;
+                        //_isPanPanelOpen = false;
+                        
+                        _isSaveMenuOpen = !_isSaveMenuOpen; 
+                      });
+                    },
+                  ),
 
-    // ۲. منوی گزینه‌های ذخیره (حالا زیر دکمه باز می‌شود)
-    // با استفاده از یک سایز کوچک (مثل SizedBox) یا Margin، منو را از دکمه فاصله می‌دهیم
-    if (_isSaveMenuOpen) const SizedBox(height: 8), 
-    
-    _buildSaveMenu(),
-  ],
-),
+                  // ۲. منوی گزینه‌های ذخیره (حالا زیر دکمه باز می‌شود)
+                  // با استفاده از یک سایز کوچک (مثل SizedBox) یا Margin، منو را از دکمه فاصله می‌دهیم
+                  if (_isSaveMenuOpen) const SizedBox(height: 8), 
+                  
+                  _buildSaveMenu(),
+                ],
+              ),
 
               const SizedBox(width: 5),
 
@@ -462,6 +466,34 @@ Column(
                       });
                     },
                   ),
+
+                  const SizedBox(height: 11), // فاصله بین پن و دکمه جدید
+
+                  // ۵. دکمه تمرکز هوشمند (Smart Focus) 🚀
+                  // دکمه شروع تحلیل (بک‌اِند)
+                  _buildActionButton(
+                    icon: _isProcessing ? Icons.sync : Icons.cloud_upload_rounded,
+                    color: Colors.orangeAccent,
+                    onPressed: () {
+                      if (!_isProcessing) {
+                        startAIProcessing();
+                      } // فراخوانی به این صورت مشکل تایپ را حل می‌کند
+                      },
+                  ),
+
+                  const SizedBox(height: 11),
+
+                  // دکمه تمرکز هوشمند
+                  _buildActionButton(
+                    icon: Icons.auto_awesome_motion,
+                    color: serverResultData != null ? Colors.cyanAccent : Colors.white24, 
+                    onPressed: () {
+                      if (serverResultData != null) {
+                        applyServerResponse(serverResultData!);
+                      }
+                    },
+                  ),
+
                 ],
               ),
             ], // پایان Row اصلی
@@ -505,61 +537,61 @@ Column(
   }
 
   Widget _buildArrowCircle(IconData icon, VoidCallback onPressed) {
-  return InkWell(
-    onTap: onPressed,
-    borderRadius: BorderRadius.circular(30),
-    child: Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: Colors.white.withOpacity(0.1),
-        border: Border.all(color: Colors.white.withOpacity(0.2)),
+    return InkWell(
+      onTap: onPressed,
+      borderRadius: BorderRadius.circular(30),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: Colors.white.withOpacity(0.1),
+          border: Border.all(color: Colors.white.withOpacity(0.2)),
+        ),
+        child: Icon(icon, color: Colors.white, size: 32),
       ),
-      child: Icon(icon, color: Colors.white, size: 32),
-    ),
-  );
-}
+    );
+  }
 
   // --- این بخش را دقیقاً قبل از پایانِ Stack (داخل لیست children) اضافه کن ---
   
  
 
-Widget _buildToolButton({
-  required IconData icon,
-  required String label,
-  required bool isActive,
-  required VoidCallback onTap,
-}) {
-  return GestureDetector(
-    onTap: onTap,
-    child: Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      decoration: BoxDecoration(
-        // اگر ابزار فعال باشد، پس‌زمینه کمی روشن‌تر می‌شود
-        color: isActive ? Colors.white.withOpacity(0.1) : Colors.transparent,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            icon,
-            color: isActive ? Colors.blueAccent : Colors.white,
-            size: 28,
-          ),
-          const SizedBox(height: 4),
-          Text(
-            label,
-            style: TextStyle(
+  Widget _buildToolButton({
+    required IconData icon,
+    required String label,
+    required bool isActive,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          // اگر ابزار فعال باشد، پس‌زمینه کمی روشن‌تر می‌شود
+          color: isActive ? Colors.white.withOpacity(0.1) : Colors.transparent,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
               color: isActive ? Colors.blueAccent : Colors.white,
-              fontSize: 12,
+              size: 28,
             ),
-          ),
-        ],
+            const SizedBox(height: 4),
+            Text(
+              label,
+              style: TextStyle(
+                color: isActive ? Colors.blueAccent : Colors.white,
+                fontSize: 12,
+              ),
+            ),
+          ],
+        ),
       ),
-    ),
-  );
-}
+    );
+  }
 
   // ۱. نقطه سبز: مرکز ثابت محوطه نمایش (Target)
   Widget _buildStaticDebugPoint() {
@@ -624,64 +656,64 @@ Widget _buildToolButton({
   void _saveFinalImage() async {
     // اگر در مرحله‌ای هستیم که قبلاً ذخیره شده، پردازش مجدد نکن
    setState(() => _isSaving = true);
-  try {
-    // ۱. پردازش و جایگزینی روی فایل اصلی
-    final File processedFile = await ImageProcessor.applyAndSave(
-      sourceFile: widget.file,
-      brightness: _brightnessValue,
-      rotationRadians: _rotationAngle,
-    );
+    try {
+      // ۱. پردازش و جایگزینی روی فایل اصلی
+      final File processedFile = await ImageProcessor.applyAndSave(
+        sourceFile: widget.file,
+        brightness: _brightnessValue,
+        rotationRadians: _rotationAngle,
+      );
 
-    if (mounted) {
-      setState(() {
-        _currentFile = processedFile; // نمایش فایل جدید
-        _historyManager.markAsSaved(); // تثبیت تاریخچه
-        _isSaving = false;
-      });
-      _showSnackBar("تغییرات با موفقیت روی فایل اصلی ذخیره شد ✅");
+      if (mounted) {
+        setState(() {
+          _currentFile = processedFile; // نمایش فایل جدید
+          _historyManager.markAsSaved(); // تثبیت تاریخچه
+          _isSaving = false;
+        });
+        _showSnackBar("تغییرات با موفقیت روی فایل اصلی ذخیره شد ✅");
+      }
+    } catch (e) {
+      setState(() => _isSaving = false);
+      _showSnackBar("خطا در ذخیره‌سازی: $e");
     }
-  } catch (e) {
-    setState(() => _isSaving = false);
-    _showSnackBar("خطا در ذخیره‌سازی: $e");
   }
-}
 
   void _showSaveConfirmationDialog() {
-  showDialog(
-    context: context,
-    builder: (context) => AlertDialog(
-      backgroundColor: Colors.grey[900],
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-      title: const Text("ذخیره تغییرات", 
-        textAlign: TextAlign.right,
-        style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-      content: const Text("آیا می‌خواهید تغییرات بر روی فایل اصلی ذخیره شود؟ این عمل فایل قدیمی را جایگزین می‌کند.",
-        textAlign: TextAlign.right,
-        style: TextStyle(color: Colors.white70)),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text("انصراف", style: TextStyle(color: Colors.white60)),
-        ),
-        TextButton(
-          onPressed: () {
-            Navigator.pop(context);
-            _exportAction(); // رفتن به منوی Save As
-          },
-          child: const Text("Save As...", style: TextStyle(color: Colors.blueAccent)),
-        ),
-        ElevatedButton(
-          style: ElevatedButton.styleFrom(backgroundColor: Colors.green[800]),
-          onPressed: () {
-            Navigator.pop(context); // بستن دیالوگ
-            _saveFinalImage(); // اینجا اتصال برقرار شد!
-          },
-          child: const Text("ذخیره"),
-        ),
-      ],
-    ),
-  );
-}
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: Colors.grey[900],
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+        title: const Text("ذخیره تغییرات", 
+          textAlign: TextAlign.right,
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        content: const Text("آیا می‌خواهید تغییرات بر روی فایل اصلی ذخیره شود؟ این عمل فایل قدیمی را جایگزین می‌کند.",
+          textAlign: TextAlign.right,
+          style: TextStyle(color: Colors.white70)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("انصراف", style: TextStyle(color: Colors.white60)),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _exportAction(); // رفتن به منوی Save As
+            },
+            child: const Text("Save As...", style: TextStyle(color: Colors.blueAccent)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.green[800]),
+            onPressed: () {
+              Navigator.pop(context); // بستن دیالوگ
+              _saveFinalImage(); // اینجا اتصال برقرار شد!
+            },
+            child: const Text("ذخیره"),
+          ),
+        ],
+      ),
+    );
+  }
 
   void _shareAction() async {
     setState(() => _isSaving = true); // نمایش لودینگ مختصر
@@ -988,73 +1020,73 @@ Widget _buildToolButton({
 
   // متد کمکی برای اجرای منطق اکسپورت (جدا کردیم که کد شلوغ نشود)
   void _executeExportLogic(String name, String format) async {
-  setState(() => _isSaving = true);
-  try {
-    // ۱. ساخت فایل در پوشه موقت (مثل قبل)
-    File tempFile = await ImageProcessor.exportImage(
-      sourceFile: _currentFile,
-      format: format,
-      fileName: name,
-    );
-
-    if (format.toUpperCase() == 'PDF') {
-      // ۲. خواندن بایت‌های فایل (این همان چیزی است که پکیج می‌خواهد)
-      Uint8List fileBytes = await tempFile.readAsBytes();
-
-      // ۳. فراخوانی متد ذخیره با پارامتر bytes
-      // نکته: روی موبایل پارامتر bytes اجباری است
-      String? outputFile = await FilePicker.saveFile(
-        dialogTitle: 'محل ذخیره فایل PDF را انتخاب کنید',
-        fileName: '$name.pdf',
-        bytes: fileBytes, // اضافه شدن بایت‌ها
+    setState(() => _isSaving = true);
+    try {
+      // ۱. ساخت فایل در پوشه موقت (مثل قبل)
+      File tempFile = await ImageProcessor.exportImage(
+        sourceFile: _currentFile,
+        format: format,
+        fileName: name,
       );
 
-      if (outputFile != null) {
-        _showSnackBar("فایل PDF با موفقیت ذخیره شد 📄");
+      if (format.toUpperCase() == 'PDF') {
+        // ۲. خواندن بایت‌های فایل (این همان چیزی است که پکیج می‌خواهد)
+        Uint8List fileBytes = await tempFile.readAsBytes();
+
+        // ۳. فراخوانی متد ذخیره با پارامتر bytes
+        // نکته: روی موبایل پارامتر bytes اجباری است
+        String? outputFile = await FilePicker.saveFile(
+          dialogTitle: 'محل ذخیره فایل PDF را انتخاب کنید',
+          fileName: '$name.pdf',
+          bytes: fileBytes, // اضافه شدن بایت‌ها
+        );
+
+        if (outputFile != null) {
+          _showSnackBar("فایل PDF با موفقیت ذخیره شد 📄");
+        } else {
+          _showSnackBar("ذخیره لغو شد");
+        }
+        
       } else {
-        _showSnackBar("ذخیره لغو شد");
+        // برای بقیه فرمت‌ها در گالری
+        await Gal.putImage(tempFile.path);
+        _showSnackBar("فایل در گالری ذخیره شد ✅");
       }
-      
-    } else {
-      // برای بقیه فرمت‌ها در گالری
-      await Gal.putImage(tempFile.path);
-      _showSnackBar("فایل در گالری ذخیره شد ✅");
+
+    } catch (e) {
+      print("Export Error: $e");
+      _showSnackBar("خطا در ذخیره‌سازی رخ داد");
+    } finally {
+      setState(() => _isSaving = false);
     }
-
-  } catch (e) {
-    print("Export Error: $e");
-    _showSnackBar("خطا در ذخیره‌سازی رخ داد");
-  } finally {
-    setState(() => _isSaving = false);
   }
-}
 
-void _showSnackBar(String message) {
-  ScaffoldMessenger.of(context).showSnackBar(
-    SnackBar(content: Text(message), backgroundColor: Colors.green),
-  );
-}
+  void _showSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), backgroundColor: Colors.green),
+    );
+  }
 
- Widget _buildSaveOption(IconData icon, String title, VoidCallback onTap) {
-  return Tooltip(
-    message: title, // متنی که با نگه داشتن دست ظاهر می‌شود
-    preferBelow: false, // تول‌تیپ را بالای آیکون نشان دهد (یا کنار)
-    child: InkWell(
-      onTap: () {
-        setState(() => _isSaveMenuOpen = false); // بستن منو بعد از انتخاب
-        onTap();
-      },
-      child: Padding(
-        padding: const EdgeInsets.all(10.0),
-        child: Icon(
-          icon, 
-          color: Colors.greenAccent, 
-          size: 22
+  Widget _buildSaveOption(IconData icon, String title, VoidCallback onTap) {
+    return Tooltip(
+      message: title, // متنی که با نگه داشتن دست ظاهر می‌شود
+      preferBelow: false, // تول‌تیپ را بالای آیکون نشان دهد (یا کنار)
+      child: InkWell(
+        onTap: () {
+          setState(() => _isSaveMenuOpen = false); // بستن منو بعد از انتخاب
+          onTap();
+        },
+        child: Padding(
+          padding: const EdgeInsets.all(10.0),
+          child: Icon(
+            icon, 
+            color: Colors.greenAccent, 
+            size: 22
+          ),
         ),
       ),
-    ),
-  );
-}
+    );
+  }
     
   /// مدیریت سیستم تاریخچه تعاملی (Undo/Redo Logic)
   /// 
@@ -1140,6 +1172,52 @@ void _showSnackBar(String message) {
         _helpText = "یک ابزار انتخاب کنید";
       }
     });
+  }
+
+  void applyServerResponse(Map<String, dynamic> response) {
+    // ۱. استخراج دیتای مستطیل (Bounding Box)
+    final rectData = response['result_data']['object_rect'];
+    
+    final Rect serverRect = Rect.fromLTWH(
+      (rectData['left'] as num).toDouble(),
+      (rectData['top'] as num).toDouble(),
+      (rectData['width'] as num).toDouble(),
+      (rectData['height'] as num).toDouble(),
+    );
+
+    // ۲. استخراج و تبدیل زاویه به رادیان
+    // ما زاویه را منفی می‌کنیم تا کجی عکس خنثی شود
+    double degree = (response['result_data']['suggested_rotation'] as num).toDouble();
+    double radians = (-degree) * (math.pi / 180);
+
+    // ۳. فراخوانی متد فوکوس هوشمند که قبلاً بازنویسی کردیم
+    // نکته: اینجا مستقیماً از ViewManager استفاده می‌کنیم یا متد لوکال خودت
+    _viewManager.smartFocus(
+      objectRect: serverRect,
+      rotationAngle: radians,
+      viewportKey: viewportKey,
+    );
+  }
+
+  Future<void> startAIProcessing() async {
+    setState(() => _isProcessing = true);
+    
+    try {
+      // ۱. ارسال فایل به بک‌اِند جنگو
+      // نکته: آدرس IP سیستم خودت را جایگزین کن
+      final response = await ImageProcessor.sendToBackend(widget.file); 
+      
+      if (response != null) {
+        setState(() {
+          serverResultData = response; // حالا این متغیر پر می‌شود!
+          _isProcessing = false;
+        });
+        _showSnackBar("هوش مصنوعی با موفقیت تصویر را تحلیل کرد ✅");
+      }
+    } catch (e) {
+      setState(() => _isProcessing = false);
+      _showSnackBar("خطا در ارتباط با سرور: $e");
+    }
   }
 
   /// ساخت نوار ابزار عمودی کناری (Side Navigation Toolbar)

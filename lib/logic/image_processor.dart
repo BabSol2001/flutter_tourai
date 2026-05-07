@@ -1,10 +1,12 @@
 import 'dart:io';
+import 'dart:convert';
 import 'package:image/image.dart' as img; // حتما پکیج image را در pubspec داشته باش
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
+import 'package:http/http.dart' as http;
 
 class ImageProcessor {
   /// اعمال تغییرات واقعی بر روی پیکسل‌های تصویر
@@ -146,5 +148,36 @@ class ImageProcessor {
 
     return File(result!.path);
   }
+
+  static const String _baseUrl = "http://192.168.0.147:8000/api/v1/smart-processor/process/";
+
+static Future<Map<String, dynamic>?> sendToBackend(File imageFile) async {
+  try {
+    var request = http.MultipartRequest('POST', Uri.parse(_baseUrl));
+    
+    // ۱. نام فیلد را چک کن (در جنگو احتمالاً original_image تعریف کردی)
+    request.files.add(
+      await http.MultipartFile.fromPath('image', imageFile.path)
+    );
+    
+    // ۲. فیلد title معمولاً در مدل‌های ما اجباری است
+    request.fields['title'] = "MobileScan_${DateTime.now().millisecond}";
+
+    var streamedResponse = await request.send();
+    var response = await http.Response.fromStream(streamedResponse);
+
+    if (response.statusCode == 201 || response.statusCode == 200) {
+      return json.decode(response.body);
+    } else {
+      // --- این خط بسیار مهم است ---
+      // چاپ متن دقیق خطا (مثلاً می‌گوید title نباید خالی باشد)
+      print("دلیل دقیق خطای ۴۰۰ از سمت جنگو: ${response.body}"); 
+      return null;
+    }
+  } catch (e) {
+    print("خطای شبکه: $e");
+    return null;
+  }
+}
 
 }
