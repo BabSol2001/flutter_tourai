@@ -1,7 +1,9 @@
+import 'dart:io';
 import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
-
+import 'dart:typed_data';
+import 'package:google_mlkit_object_detection/google_mlkit_object_detection.dart';
 
 /// کلاس مدیریت نمایش و تحولات تصویر (View & Transformation Manager)
 /// 
@@ -20,7 +22,7 @@ class ViewManager {
   double rawImageWidth = 0;       // عرض واقعی پیکسل‌های عکس
   double rawImageHeight = 0;      // ارتفاع واقعی پیکسل‌های عکس
   Timer? _zoomTimer;              // تایمر برای مدیریت زوم/چرخش پیوسته
-
+  double currentFitScale = 1.0;    // تراز فعلی برای تراز کردن عکس با صفحه
   // --- ثابت‌های تنظیمات ---
   static const double _rotateStep = math.pi / 180; // گام ۱۰ درجه‌ای برای چرخش
   static const double _zoomFactor = 0.005;          // مقدار تغییر زوم در هر پله زدن
@@ -28,9 +30,17 @@ class ViewManager {
   Offset? debugViewportCenter; // نقطه قرمز (مرکز محوطه سیاه)
   Offset? debugActualImageCenter; // نقطه زرد (مرکز واقعی عکس بعد از تحولات)
 
+  final AnimationController animationController; 
 
-  ViewManager({required this.controller, required this.onUpdate});
+  Animation<Matrix4>? _animationMatrix;
 
+
+  // ۲. اضافه کردن animationController به ورودی‌های سازنده
+  ViewManager({
+    required this.controller,
+    required this.onUpdate,
+    required this.animationController, // این خط اضافه شد
+  });
 
   /// آزادسازی منابع برای جلوگیری از Memory Leak
   void dispose() {
@@ -194,7 +204,7 @@ void fitToScreen(GlobalKey key) {
   double scaleX = renderBox.size.width / effectiveWidth;
   double scaleY = renderBox.size.height / effectiveHeight;
   double targetScale = (scaleX < scaleY) ? scaleX : scaleY;
-
+  currentFitScale = targetScale; // 👈 این خط را اضافه کنید
   // ۲. اعمال زوم و چرخش به کنترلر (بدون تغییر دادن آفست فعلی)
   final Matrix4 newMatrix = Matrix4.identity();
   newMatrix.scale(targetScale);
@@ -490,42 +500,352 @@ void stopContinuousPan() {
   }
 
  /// تمرکز هوشمند بر اساس خروجی هوش مصنوعی (مختصات و زاویه)
-  void smartFocus({
-    required Rect objectRect,      // مستطیلی که از بک‌اِند (object_rect) گرفتیم
-    required double rotationAngle, // زاویه‌ای که از بک‌اِند (suggested_rotation) گرفتیم
+void smartFocus({
+    required Rect objectRect,
+    required double rotationAngle,
     required GlobalKey viewportKey,
     double padding = 40.0,
   }) {
+    print("--- 🎯 شروع عملیات Smart Focus ---");
+    
     final renderBox = viewportKey.currentContext?.findRenderObject() as RenderBox?;
+    
     // بررسی وجود رندر باکس و ابعاد تصویر اصلی
-    if (renderBox == null || rawImageWidth == 0) return;
+    if (renderBox == null) {
+      print("❌ خطا: Viewport یافت نشد (GlobalKey اشتباه است یا ویجت هنوز رندر نشده)");
+      return;
+    }
+    if (rawImageWidth == 0 || rawImageHeight == 0) {
+      print("❌ خطا: ابعاد واقعی عکس صفر است! (rawImageWidth: $rawImageWidth)");
+      return;
+    }
 
-    // ۱. محاسبه ابعاد فضای نمایش تصویر در موبایل (با کسر پدینگ)
+    // ۱. اطلاعات ورودی
+    print("📥 22222222222222222222222222ورودی سرور:");
+    print("   - مستطیل سوژه (Object Rect): $objectRect");
+    print("   - مرکز سوژه: ${objectRect.center}");
+    print("   - زاویه پیشنهادی (رادیان): $rotationAngle");
+
+    // ۲. محاسبه ابعاد فضای نمایش تصویر در موبایل (با کسر پدینگ)
     double viewW = renderBox.size.width - (padding * 2);
     double viewH = renderBox.size.height - (padding * 2);
+    print("📱 ابعاد نمایشگر (Viewport): ${renderBox.size.width}x${renderBox.size.height}");
 
-    // ۲. محاسبه مقیاس زوم (Scale)
-    // هدف: سوژه دقیقاً در مرکز کادر جا شود
+    // ۳. محاسبه مقیاس زوم (Scale)
     double scaleX = viewW / objectRect.width;
     double scaleY = viewH / objectRect.height;
     
-    // انتخاب کمترین مقیاس برای اینکه کل شیء دیده شود (محدوده بین ۰.۵ تا ۵ برابر زوم)
-    double targetScale = (scaleX < scaleY ? scaleX : scaleY).clamp(0.5, 5.0);
+    // انتخاب کمترین مقیاس برای اینکه کل شیء دیده شود
+    double targetScale = (scaleX < scaleY ? scaleX : scaleY).clamp(0.5, 10.0);
+    print("🔍 محاسبات زوم:");
+    print("   - مقیاس پیشنهادی عرض: ${scaleX.toStringAsFixed(2)}");
+    print("   - مقیاس پیشنهادی ارتفاع: ${scaleY.toStringAsFixed(2)}");
+    print("   - زوم نهایی اعمال شده: ${targetScale.toStringAsFixed(2)}");
 
-    // ۳. پیدا کردن مرکز ویوپورت (نقطه وسط صفحه گوشی)
+    // ۴. پیدا کردن مرکز ویوپورت (نقطه وسط کادر سیاه)
     Offset viewCenter = Offset(renderBox.size.width / 2, renderBox.size.height / 2);
+    print("📍 مرکز هدف در صفحه گوشی: $viewCenter");
 
-    // ۴. ساخت ماتریس تغییر وضعیت (Transformation Matrix)
-    // ترتیب عملیات برای چرخش حول مرکز شیء بسیار مهم است:
+    // ۵. ساخت ماتریس تغییر وضعیت
     final Matrix4 targetMatrix = Matrix4.identity()
-      ..translate(viewCenter.dx, viewCenter.dy) // انتقال به مرکز ویو
-      ..scale(targetScale)                      // اعمال زوم
-      ..rotateZ(rotationAngle)                  // اعمال زاویه اصلاحی (رادیان)
-      ..translate(-objectRect.center.dx, -objectRect.center.dy); // تنظیم مرکز سوژه در مرکز تصویر
+      ..translate(viewCenter.dx, viewCenter.dy)
+      ..scale(targetScale)
+      ..rotateZ(rotationAngle)
+      ..translate(-objectRect.center.dx, -objectRect.center.dy);
 
-    // ۵. اعمال ماتریس به کنترلر و بروزرسانی رابط کاربری
-    // برای نرم شدن این حرکت، از Matrix4Tween استفاده کنید (که در پیام قبلی توضیح دادم)
-    controller.value = targetMatrix;
+    print("🚀 ماتریس نهایی تولید شد. در حال اعمال...");
+
+    // ۶. اعمال ماتریس به صورت انیمیشن (یا مستقیم)
+    animateToMatrix(targetMatrix);
+    
     onUpdate();
+    print("--- ✅ پایان عملیات Smart Focus ---");
   }
+
+  void animateToMatrix(Matrix4 targetMatrix) {
+    print("--- 🎬 شروع انیمیشن ماتریس ---");
+
+    // ۱. استخراج مقادیر نهایی برای لاگ (بسیار مفید برای دیباگ)
+    final Float64List storage = targetMatrix.storage;
+    double finalScale = targetMatrix.getMaxScaleOnAxis();
+    double finalTranslationX = storage[12];
+    double finalTranslationY = storage[13];
+
+    print("📊 وضعیت نهایی هدف:");
+    print("   - میزان زوم نهایی: ${finalScale.toStringAsFixed(2)}");
+    print("   - جابه‌جایی نهایی: X=${finalTranslationX.toStringAsFixed(1)}, Y=${finalTranslationY.toStringAsFixed(1)}");
+
+    // ۲. تعریف Tween برای حرکت نرم از وضعیت فعلی به وضعیت هدف
+    final Matrix4Tween matrixTween = Matrix4Tween(
+      begin: controller.value,
+      end: targetMatrix,
+    );
+
+    _animationMatrix = matrixTween.animate(
+      CurvedAnimation(
+        parent: animationController,
+        curve: Curves.fastOutSlowIn,
+      ),
+    );
+
+    // ۳. مدیریت لیسنرها (پاکسازی لیسنر قبلی برای جلوگیری از نشت حافظه)
+    animationController.removeListener(_updateTransformation);
+    animationController.addListener(_updateTransformation);
+
+    // ۴. شروع انیمیشن
+    print("🚀 استارت موتور انیمیشن...");
+    animationController.reset();
+    animationController.forward().then((_) {
+      print("✅ انیمیشن با موفقیت به پایان رسید.");
+    });
+  }
+
+  // این متد در هر فریم انیمیشن اجرا می‌شود
+  void _updateTransformation() {
+    if (_animationMatrix != null) {
+      controller.value = _animationMatrix!.value;
+      
+      // لاگ کردن لحظه‌ای (اختیاری - اگر کنسول خیلی شلوغ شد این خط را کامنت کنید)
+      // print("🎞 در حال حرکت... زوم لحظه‌ای: ${controller.value.getMaxScaleOnAxis().toStringAsFixed(2)}");
+      
+      onUpdate(); // اطلاع به UI برای رندر فریم جدید
+    }
+  }
+
+void focusOnObject({
+  required Rect objectRect,
+  required double rotationAngle,
+  required GlobalKey viewportKey,
+  double padding = 40.0,
+}) {
+  final renderBox = viewportKey.currentContext?.findRenderObject() as RenderBox?;
+  if (renderBox == null) return;
+
+  double viewW = renderBox.size.width;
+  double viewH = renderBox.size.height;
+
+  if (rawImageWidth == 0 || rawImageHeight == 0) {
+    print("⚠️ ابعاد عکس ناقص است! W:$rawImageWidth, H:$rawImageHeight");
+    return;
+  }
+
+  // ۱. محاسبه Scale اولیه (چقدر عکس بزرگ شده تا در صفحه جا شود)
+  // ما باید بفهمیم عکس چطور در صفحه فیت شده است (مانند BoxFit.contain)
+  double scaleToFit = (viewW / rawImageWidth < viewH / rawImageHeight) 
+      ? viewW / rawImageWidth 
+      : viewH / rawImageHeight;
+
+  // ۲. پیدا کردن مختصات مرکز عکس در صفحه (چون عکس وسط‌چین است)
+  double displayedImageWidth = rawImageWidth * scaleToFit;
+  double displayedImageHeight = rawImageHeight * scaleToFit;
+  
+  double offsetX = (viewW - displayedImageWidth) / 2;
+  double offsetY = (viewH - displayedImageHeight) / 2;
+
+  // ۳. تبدیل مختصات سوژه از پیکسل خام به پیکسل نمایشگر
+  // ابتدا تبدیل به مقیاس گوشی، سپس اضافه کردن آفستِ ناشی از وسط‌چین بودن عکس
+  double centerX = (objectRect.center.dx * scaleToFit) + offsetX;
+  double centerY = (objectRect.center.dy * scaleToFit) + offsetY;
+
+  // ۴. محاسبه زوم (Scale) هدف
+  // عرض سوژه در نمایشگر
+  double objectViewWidth = objectRect.width * scaleToFit;
+  
+  // هدف: سوژه ۷۰٪ عرض یا ارتفاع نمایشگر را پر کند (هر کدام که کوچکتر بود)
+  double targetScale = (viewW * 0.7) / objectViewWidth;
+
+  // ۵. محدود کردن زوم (بین ۱.۵ تا ۵ برابر)
+  targetScale = targetScale.clamp(1.5, 5.0);
+
+  print("📏 سوژه در عکس: ${objectRect.width.toInt()}x${objectRect.height.toInt()}");
+  print("🔍 زوم نهایی: ${targetScale.toStringAsFixed(2)}");
+
+  // ۶. ساخت ماتریس نهایی
+  // ترتیب عملیات در ماتریس از پایین به بالا خوانده می‌شود:
+  // اول انتقال به مرکز، بعد زوم، بعد چرخش، و در نهایت جابه‌جایی به مرکز گوشی
+  final Matrix4 targetMatrix = Matrix4.identity();
+  
+  targetMatrix.translate(viewW / 2, viewH / 2); // ۳. بردن به وسط صفحه گوشی
+  targetMatrix.rotateZ(rotationAngle);           // ۴. اعمال چرخش (اگر نیاز بود)
+  targetMatrix.scale(targetScale);               // ۲. اعمال زوم
+  targetMatrix.translate(-centerX, -centerY);    // ۱. بردن سوژه به نقطه صفر
+
+  animateToMatrix(targetMatrix);
+}
+
+ /// متد برای زوم دوبرابری روی یک نقطه خاص بدون درگیری با هوش مصنوعی
+void zoomToPoint({
+  required Offset tapPoint, // مختصاتی که از details.localPosition می‌آید
+  required GlobalKey viewportKey,
+}) {
+  final renderBox = viewportKey.currentContext?.findRenderObject() as RenderBox?;
+  if (renderBox == null || rawImageWidth == 0) return;
+
+  double viewW = renderBox.size.width;
+  double viewH = renderBox.size.height;
+
+  // ۱. تبدیل نقطه تپ شده از اسکرین به مختصات واقعی عکس
+  // این مرحله حیاتی است؛ چون تپ شما روی عکسی خورده که الان کوچک (Scale: 0.16) است.
+  final Matrix4 inverseCurrent = Matrix4.inverted(controller.value);
+  final Offset localPoint = MatrixUtils.transformPoint(inverseCurrent, tapPoint);
+
+  // ۲. زوم هدف (۲ برابرِ حالت فیت)
+  double targetScale = currentFitScale * 2.0;
+
+  // ۳. محاسبه جابه‌جایی برای مرکزیت
+  // فرمول: (مرکز نمایشگر) - (مختصات واقعی نقطه در زومِ جدید)
+  double targetX = (viewW / 2) - (localPoint.dx * targetScale);
+  double targetY = (viewH / 2) - (localPoint.dy * targetScale);
+
+  // ۴. ساخت ماتریس نهایی
+  final Matrix4 targetMatrix = Matrix4.identity()
+    ..translate(targetX, targetY)
+    ..scale(targetScale);
+
+  print("🎯 نقطه محلی محاسبه شده (Local): $localPoint");
+  print("🔍 زوم هدف: $targetScale");
+  print("↕️ جابه‌جایی نهایی: X=${targetX.toInt()}, Y=${targetY.toInt()}");
+
+  animateToMatrix(targetMatrix);
+}
+
+}
+
+class LocalAiProcessor {
+  // --- موشکافی برای یافتن تمام اشیاء (برای تپ سه‌گانه) ---
+  static Future<List<Rect>> detectAllObjects(File imageFile) async {
+    final inputImage = InputImage.fromFile(imageFile);
+    
+    final options = ObjectDetectorOptions(
+      mode: DetectionMode.single, // برای پردازش دقیق یک تصویر ایستا
+      classifyObjects: true,
+      multipleObjects: true, // یافتن بیش از یک شیء
+    );
+
+    final objectDetector = ObjectDetector(options: options);
+    
+    try {
+      final List<DetectedObject> objects = await objectDetector.processImage(inputImage);
+      
+      // استخراج مرزهای (Bounding Boxes) تمام اشیاء یافت شده
+      return objects.map((obj) => obj.boundingBox).toList();
+    } catch (e) {
+      print("در روند موشکافی هوش دست‌ساخته خطایی رخ داد: $e");
+      return [];
+    } finally {
+      objectDetector.close();
+    }
+  }
+
+  // ۲. متد هوشمند برای پیدا کردن نزدیک‌ترین شیء به نقطه تپ شده
+  static Future<Rect?> detectObjectAtPoint(File imageFile, Offset touchPoint) async {
+    final inputImage = InputImage.fromFile(imageFile);
+    
+    final options = ObjectDetectorOptions(
+      mode: DetectionMode.single,
+      classifyObjects: true,
+      multipleObjects: true,
+    );
+
+    final objectDetector = ObjectDetector(options: options);
+    
+    try {
+      final List<DetectedObject> objects = await objectDetector.processImage(inputImage);
+      
+      if (objects.isEmpty) return null;
+
+      DetectedObject? bestMatch;
+      double minDistance = double.infinity;
+
+      for (var obj in objects) {
+        // اگر نقطه دقیقاً داخل یک مستطیل باشد
+        if (obj.boundingBox.contains(touchPoint)) {
+          return obj.boundingBox;
+        }
+        
+        // محاسبه فاصله مرکز مستطیل تا نقطه تپ برای پیدا کردن نزدیک‌ترین مورد
+        double dist = (obj.boundingBox.center - touchPoint).distance;
+        if (dist < minDistance) {
+          minDistance = dist;
+          bestMatch = obj;
+        }
+      }
+
+      return bestMatch?.boundingBox;
+    } catch (e) {
+      print("❌ خطا در موشکافی نقطه‌ای: $e");
+      return null;
+    } finally {
+      objectDetector.close();
+    }
+  }
+
+}
+
+class ObjectBoundsPainter extends CustomPainter {
+  final List<Rect> rects;
+  final Size imageRawSize;
+  final Size layerLocalSize; // ابعاد کانتینر لایه روی نمایشگر
+  final Matrix4 transform; 
+
+  ObjectBoundsPainter({
+    required this.rects,
+    required this.imageRawSize,
+    required this.layerLocalSize,
+    required this.transform,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (imageRawSize.width == 0 || layerLocalSize.width == 0 || rects.isEmpty) return;
+
+    // ۱. محاسبه ابعاد دقیق عکس رندر شده در حالت BoxFit.contain داخل کانتینر لایه
+    double srcAspect = imageRawSize.width / imageRawSize.height;
+    double dstAspect = layerLocalSize.width / layerLocalSize.height;
+
+    double drawWidth, drawHeight;
+    if (srcAspect > dstAspect) {
+      drawWidth = layerLocalSize.width;
+      drawHeight = layerLocalSize.width / srcAspect;
+    } else {
+      drawHeight = layerLocalSize.height;
+      drawWidth = layerLocalSize.height * srcAspect;
+    }
+
+    final double initialScale = transform.getMaxScaleOnAxis();
+
+    // ۲. پیدا کردن آفست یا همان نقطه شروع (Top-Left) واقعی عکس رندر شده (حذف فضاهای سیاه دور عکس)
+    double offsetX = ((layerLocalSize.width*initialScale) - drawWidth) / 2;
+    double offsetY = ((layerLocalSize.height*initialScale) - drawHeight) / 2;
+
+    // ۳. محاسبه ضریب تبدیل دقیق از پیکسل خام به ابعاد فیزیکی عکس روی صفحه
+    double scaleX = drawWidth / (initialScale*imageRawSize.width);
+    double scaleY = drawHeight / (initialScale*imageRawSize.height);
+
+    final paint = Paint()
+      ..color = const Color(0xFF00FF00) // سبز هوش مصنوعی
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.5;
+
+    // ۴. اعمال ماتریکس زوم، چرخش و پن دقیقاً بر اساس دستگاه مختصات تصویر مبنا
+    canvas.save();
+    canvas.transform(transform.storage);
+
+    for (var rect in rects) {
+      // نگاشت مستطیل خام هوش مصنوعی به مختصات فیزیکی عکس رندر شده
+      final Rect localRect = Rect.fromLTRB(
+        offsetX + (rect.left * scaleX*1),
+        offsetY + (rect.top * scaleY*1),
+        offsetX + (rect.right * scaleX*1),
+        offsetY + (rect.bottom * scaleY*1),
+      );
+      
+      canvas.drawRect(localRect, paint);
+    }
+
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(covariant ObjectBoundsPainter oldDelegate) => true;
 }
